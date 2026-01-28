@@ -28,20 +28,28 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "vitest --run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@moltbot-china/shared": "workspace:*",
-    "dingtalk-stream": "^1.0.0",
+    "@moltbot-china/shared": "file:../../packages/shared",
+    "dingtalk-stream": "^2.1.4",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "moltbot": "^1.0.0",
-    "typescript": "^5.7.0"
+    "fast-check": "^3.22.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
   },
   "peerDependencies": {
     "moltbot": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "moltbot": {
+      "optional": true
+    }
   },
   "bundledDependencies": [
     "@moltbot-china/shared"
