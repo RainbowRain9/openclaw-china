@@ -152,15 +152,29 @@ describe("Feature: dingtalk-integration, Property 2: 消息解析正确性", () 
   });
 
   /**
-   * Property: mentionedBot should be true if and only if atUsers array is non-empty
+   * Property: mentionedBot should respect robotCode when present,
+   * otherwise fall back to any @mention.
    */
-  it("should correctly detect @mentions from atUsers array", () => {
+  it("should correctly detect @mentions with or without robotCode", () => {
     fc.assert(
       fc.property(dingtalkRawMessageArb, (raw) => {
         const ctx = parseDingtalkMessage(raw);
-        
-        const hasAtUsers = Array.isArray(raw.atUsers) && raw.atUsers.length > 0;
-        expect(ctx.mentionedBot).toBe(hasAtUsers);
+
+        const atUsers = raw.atUsers ?? [];
+        const hasAtUsers = atUsers.length > 0;
+        const hasRobotCode = Boolean(raw.robotCode);
+
+        if (!hasAtUsers) {
+          expect(ctx.mentionedBot).toBe(false);
+          return;
+        }
+
+        if (hasRobotCode) {
+          const mentionsRobot = atUsers.some((u) => u.dingtalkId === raw.robotCode);
+          expect(ctx.mentionedBot).toBe(mentionsRobot);
+        } else {
+          expect(ctx.mentionedBot).toBe(true);
+        }
       }),
       { numRuns: 100 }
     );

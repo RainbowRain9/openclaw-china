@@ -79,12 +79,18 @@ export async function monitorDingtalkProvider(opts: MonitorDingtalkOpts = {}): P
       if (currentClient === client) {
         currentClient = null;
       }
+      try {
+        client.disconnect();
+      } catch (err) {
+        error(`[dingtalk] failed to disconnect client: ${String(err)}`);
+      }
     };
     
     // 处理中止信号
     const handleAbort = () => {
       log("[dingtalk] abort signal received, stopping Stream client");
       cleanup();
+      abortSignal?.removeEventListener("abort", handleAbort);
       resolve();
     };
     
@@ -107,14 +113,13 @@ export async function monitorDingtalkProvider(opts: MonitorDingtalkOpts = {}): P
           
           log(`[dingtalk] received message from ${rawMessage.senderId} (type=${rawMessage.msgtype})`);
           
-          // 处理消息
+          // 处理消息（使用全局 runtime，不再传递 getRuntime）
           await handleDingtalkMessage({
             cfg: config,
             raw: rawMessage,
             accountId,
             log,
             error,
-            getRuntime: () => runtime,
           });
           
           // 返回成功确认
@@ -146,7 +151,13 @@ export async function monitorDingtalkProvider(opts: MonitorDingtalkOpts = {}): P
  */
 export function stopDingtalkMonitor(): void {
   if (currentClient) {
-    currentClient = null;
+    try {
+      currentClient.disconnect();
+    } catch (err) {
+      console.error(`[dingtalk] failed to disconnect client: ${String(err)}`);
+    } finally {
+      currentClient = null;
+    }
   }
 }
 

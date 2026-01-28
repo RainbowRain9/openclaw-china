@@ -11,13 +11,19 @@
  */
 
 import { dingtalkPlugin, DEFAULT_ACCOUNT_ID } from "./src/channel.js";
+import { setDingtalkRuntime } from "./src/runtime.js";
 
 /**
- * Moltbot 插件 API 接口（简化版）
- * 实际类型来自 moltbot/plugin-sdk
+ * Moltbot 插件 API 接口
+ * 
+ * 包含：
+ * - registerChannel: 注册渠道插件
+ * - runtime: 完整的 Moltbot 运行时（包含 core API）
  */
 export interface MoltbotPluginApi {
   registerChannel: (opts: { plugin: unknown }) => void;
+  /** Moltbot 运行时，包含 channel.routing、channel.reply 等核心 API */
+  runtime?: unknown;
   [key: string]: unknown;
 }
 
@@ -26,6 +32,9 @@ export { dingtalkPlugin, DEFAULT_ACCOUNT_ID } from "./src/channel.js";
 
 // 导出发送消息函数
 export { sendMessageDingtalk } from "./src/send.js";
+
+// 导出 runtime 管理函数（供外部设置）
+export { setDingtalkRuntime, getDingtalkRuntime } from "./src/runtime.js";
 
 // 导出类型
 export type { DingtalkConfig, ResolvedDingtalkAccount, DingtalkSendResult } from "./src/types.js";
@@ -38,7 +47,7 @@ export type { DingtalkConfig, ResolvedDingtalkAccount, DingtalkSendResult } from
  * - name: 插件名称
  * - description: 插件描述
  * - configSchema: 配置 JSON Schema
- * - register: 注册函数，调用 api.registerChannel
+ * - register: 注册函数，调用 api.registerChannel 并设置 runtime
  *
  * Requirements: 1.1
  */
@@ -66,11 +75,19 @@ const plugin = {
   /**
    * 注册钉钉渠道插件
    *
-   * 调用 api.registerChannel 将 dingtalkPlugin 注册到 Moltbot
+   * 1. 设置完整的 Moltbot 运行时（包含 core API）
+   * 2. 调用 api.registerChannel 将 dingtalkPlugin 注册到 Moltbot
    *
    * Requirements: 1.1
    */
   register(api: MoltbotPluginApi) {
+    // 设置完整的运行时（包含 channel.routing、channel.reply 等 API）
+    // 这是消息分发到 Agent 的关键
+    if (api.runtime) {
+      setDingtalkRuntime(api.runtime as Record<string, unknown>);
+    }
+    
+    // 注册渠道插件
     api.registerChannel({ plugin: dingtalkPlugin });
   },
 };

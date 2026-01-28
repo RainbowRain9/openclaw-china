@@ -15,6 +15,7 @@ import type { ResolvedDingtalkAccount, DingtalkConfig } from "./types.js";
 import { DingtalkConfigSchema, isConfigured, resolveDingtalkCredentials } from "./config.js";
 import { dingtalkOutbound } from "./outbound.js";
 import { monitorDingtalkProvider } from "./monitor.js";
+import { setDingtalkRuntime } from "./runtime.js";
 
 /** 默认账户 ID */
 export const DEFAULT_ACCOUNT_ID = "default";
@@ -273,14 +274,16 @@ export const dingtalkPlugin = {
       setStatus?: (status: Record<string, unknown>) => void;
       log?: { info: (msg: string) => void; error: (msg: string) => void };
     }): Promise<void> => {
-      const dingtalkCfg = ctx.cfg.channels?.dingtalk;
-
       ctx.setStatus?.({ accountId: ctx.accountId });
       ctx.log?.info(`[dingtalk] starting provider for account ${ctx.accountId}`);
 
+      if (ctx.runtime) {
+        setDingtalkRuntime(ctx.runtime as Record<string, unknown>);
+      }
+
       return monitorDingtalkProvider({
         config: ctx.cfg,
-        runtime: {
+        runtime: (ctx.runtime as { log?: (msg: string) => void; error?: (msg: string) => void }) ?? {
           log: ctx.log?.info ?? console.log,
           error: ctx.log?.error ?? console.error,
         },

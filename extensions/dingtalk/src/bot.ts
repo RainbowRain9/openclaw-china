@@ -6,6 +6,7 @@
 
 import type { DingtalkRawMessage, DingtalkMessageContext } from "./types.js";
 import type { DingtalkConfig } from "./config.js";
+import { getDingtalkRuntime, isDingtalkRuntimeInitialized } from "./runtime.js";
 
 /**
  * 策略检查结果
@@ -42,8 +43,7 @@ export function parseDingtalkMessage(raw: DingtalkRawMessage): DingtalkMessageCo
   }
   
   // 检查是否 @提及了机器人
-  // atUsers 数组非空表示有 @提及
-  const mentionedBot = Array.isArray(raw.atUsers) && raw.atUsers.length > 0;
+  const mentionedBot = resolveMentionedBot(raw);
   
   // 生成消息 ID（钉钉 Stream 消息没有独立 messageId，使用 conversationId + 时间戳）
   const messageId = `${raw.conversationId}_${Date.now()}`;
@@ -59,6 +59,21 @@ export function parseDingtalkMessage(raw: DingtalkRawMessage): DingtalkMessageCo
     mentionedBot,
     robotCode: raw.robotCode,
   };
+}
+
+/**
+ * 判断是否 @提及了机器人
+ *
+ * - 如果提供了 robotCode，则只在 atUsers 包含 robotCode 时判定为提及机器人
+ * - 如果缺少 robotCode，则退化为“存在任意 @”的判断
+ */
+function resolveMentionedBot(raw: DingtalkRawMessage): boolean {
+  const atUsers = raw.atUsers ?? [];
+  if (atUsers.length === 0) return false;
+  if (raw.robotCode) {
+    return atUsers.some((user) => user.dingtalkId === raw.robotCode);
+  }
+  return true;
 }
 
 /**
@@ -262,7 +277,6 @@ export async function handleDingtalkMessage(params: {
   accountId?: string;
   log?: (msg: string) => void;
   error?: (msg: string) => void;
-  getRuntime?: () => unknown; // PluginRuntime
 }): Promise<void> {
   const {
     cfg,
@@ -270,7 +284,6 @@ export async function handleDingtalkMessage(params: {
     accountId = "default",
     log = console.log,
     error = console.error,
-    getRuntime,
   } = params;
   
   // 解析消息
@@ -317,33 +330,26 @@ export async function handleDingtalkMessage(params: {
     }
   }
   
-  // 获取运行时并分发到 Agent
-  if (!getRuntime) {
-    log(`[dingtalk] no runtime available, skipping dispatch`);
+  // 检查运行时是否已初始化
+  if (!isDingtalkRuntimeInitialized()) {
+    log(`[dingtalk] runtime not initialized, skipping dispatch`);
     return;
   }
   
   try {
-    const core = getRuntime() as {
-      channel: {
-        routing: {
-          resolveAgentRoute: (params: {
-            cfg: unknown;
-            channel: string;
-            peer: { kind: string; id: string };
-          }) => { sessionKey: string; accountId: string; agentId?: string };
-        };
-        reply: {
-          dispatchReplyFromConfig: (params: {
-            ctx: InboundContext;
-            cfg: unknown;
-            dispatcher?: unknown;
-            replyOptions?: unknown;
-          }) => Promise<{ queuedFinal: boolean; counts: { final: number } }>;
-          finalizeInboundContext: (ctx: InboundContext) => InboundContext;
-        };
-      };
-    };
+    // 获取完整的 Moltbot 运行时（包含 core API）
+    const core = getDingtalkRuntime();
+    
+    // 检查必要的 API 是否存在
+    if (!core.channel?.routing?.resolveAgentRoute) {
+      log(`[dingtalk] core.channel.routing.resolveAgentRoute not available, skipping dispatch`);
+      return;
+    }
+    
+    if (!core.channel?.reply?.dispatchReplyFromConfig) {
+      log(`[dingtalk] core.channel.reply.dispatchReplyFromConfig not available, skipping dispatch`);
+      return;
+    }
     
     // 解析路由
     const route = core.channel.routing.resolveAgentRoute({
@@ -357,7 +363,11 @@ export async function handleDingtalkMessage(params: {
     
     // 构建入站上下文
     const inboundCtx = buildInboundContext(ctx, route.sessionKey, route.accountId);
-    const finalCtx = core.channel.reply.finalizeInboundContext(inboundCtx);
+    
+    // 如果有 finalizeInboundContext，使用它
+    const finalCtx = core.channel.reply.finalizeInboundContext
+      ? core.channel.reply.finalizeInboundContext(inboundCtx)
+      : inboundCtx;
     
     log(`[dingtalk] dispatching to agent (session=${route.sessionKey})`);
     
