@@ -264,12 +264,15 @@ export async function monitorDingtalkProvider(opts: MonitorDingtalkOpts = {}): P
             "";
           const contentTrimmed = content.trim();
           const contentLen = contentTrimmed.length;
-          // 确保 hash 包含 streamMessageId 以保证唯一性
-          const hashInput = `${rawMessage.streamMessageId ?? ""}:${rawMessage.msgtype}:${contentTrimmed}`;
-          const contentHash = hashText(hashInput);
+          // 内容签名用于短 TTL 去重（不含 streamMessageId，避免重投递导致重复处理）
+          const contentHash = hashText(`${rawMessage.msgtype}:${contentTrimmed}`);
+          // 传输层哈希仅用于日志观测
+          const transportHash = rawMessage.streamMessageId
+            ? hashText(`${rawMessage.streamMessageId}:${rawMessage.msgtype}:${contentTrimmed}`)
+            : contentHash;
 
           log(
-            `[dingtalk] inbound message: streamId=${rawMessage.streamMessageId ?? "none"} sender=${rawMessage.senderId} convo=${rawMessage.conversationId} type=${rawMessage.msgtype} len=${contentLen} hash=${contentHash}`,
+            `[dingtalk] inbound message: streamId=${rawMessage.streamMessageId ?? "none"} sender=${rawMessage.senderId} convo=${rawMessage.conversationId} type=${rawMessage.msgtype} len=${contentLen} hash=${transportHash}`,
           );
 
           const now = Date.now();
