@@ -27,10 +27,10 @@ export const DingtalkConfigSchema = z.object({
   clientSecret: z.string().optional(),
   
   /** 单聊策略: open=开放, pairing=配对, allowlist=白名单 */
-  dmPolicy: z.enum(["open", "pairing", "allowlist"]).optional().default("pairing"),
+  dmPolicy: z.enum(["open", "pairing", "allowlist"]).optional().default("open"),
   
   /** 群聊策略: open=开放, allowlist=白名单, disabled=禁用 */
-  groupPolicy: z.enum(["open", "allowlist", "disabled"]).optional().default("allowlist"),
+  groupPolicy: z.enum(["open", "allowlist", "disabled"]).optional().default("open"),
   
   /** 群聊是否需要 @机器人才响应 */
   requireMention: z.boolean().optional().default(true),

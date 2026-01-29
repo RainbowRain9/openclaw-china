@@ -264,7 +264,9 @@ export async function monitorDingtalkProvider(opts: MonitorDingtalkOpts = {}): P
             "";
           const contentTrimmed = content.trim();
           const contentLen = contentTrimmed.length;
-          const contentHash = hashText(`${rawMessage.msgtype}:${contentTrimmed}`);
+          // 确保 hash 包含 streamMessageId 以保证唯一性
+          const hashInput = `${rawMessage.streamMessageId ?? ""}:${rawMessage.msgtype}:${contentTrimmed}`;
+          const contentHash = hashText(hashInput);
 
           log(
             `[dingtalk] inbound message: streamId=${rawMessage.streamMessageId ?? "none"} sender=${rawMessage.senderId} convo=${rawMessage.conversationId} type=${rawMessage.msgtype} len=${contentLen} hash=${contentHash}`,
@@ -300,6 +302,14 @@ export async function monitorDingtalkProvider(opts: MonitorDingtalkOpts = {}): P
           markMessageProcessed(dedupeId);
 
           log(`[dingtalk] received message from ${rawMessage.senderId} (type=${rawMessage.msgtype})`);
+          
+          // Debug: log atUsers for mention detection
+          if (rawMessage.atUsers) {
+            log(`[dingtalk] atUsers: ${JSON.stringify(rawMessage.atUsers)}`);
+          }
+          if (rawMessage.robotCode) {
+            log(`[dingtalk] robotCode: ${rawMessage.robotCode}`);
+          }
 
           // Process asynchronously; ACK immediately.
           void handleDingtalkMessage({

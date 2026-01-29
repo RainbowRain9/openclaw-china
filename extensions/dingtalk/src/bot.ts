@@ -77,11 +77,8 @@ export function parseDingtalkMessage(raw: DingtalkRawMessage): DingtalkMessageCo
  */
 function resolveMentionedBot(raw: DingtalkRawMessage): boolean {
   const atUsers = raw.atUsers ?? [];
-  if (atUsers.length === 0) return false;
-  if (raw.robotCode) {
-    return atUsers.some((user) => user.dingtalkId === raw.robotCode);
-  }
-  return true;
+  // 只要有 @，就认为机器人被提及（钉钉群聊机器人只有被 @才会收到消息）
+  return atUsers.length > 0;
 }
 
 /**
