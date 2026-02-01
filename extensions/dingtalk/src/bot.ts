@@ -283,8 +283,6 @@ async function* streamFromGateway(params: {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let accumulated = "";
-  let streamDone = false;
 
   while (true) {
     const { done: readDone, value } = await reader.read();
@@ -297,25 +295,17 @@ async function* streamFromGateway(params: {
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue;
       const data = line.slice(6).trim();
-      if (data === "[DONE]") {
-        streamDone = true;
-        break;
-      }
+      if (data === "[DONE]") return;
       try {
         const chunk = JSON.parse(data);
         const content = (chunk as Record<string, unknown>)?.choices?.[0]?.delta?.content;
         if (typeof content === "string" && content) {
-          accumulated += content;
+          yield content;
         }
       } catch {
         continue;
       }
     }
-    if (streamDone) break;
-  }
-
-  if (streamDone && accumulated) {
-    yield accumulated;
   }
 }
 
