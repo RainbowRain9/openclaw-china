@@ -292,25 +292,25 @@ export const wecomAppPlugin = {
     },
 
     /**
-     * 主动发送图片消息
-     * 
-     * 流程: 下载图片 → 上传素材 → 发送图片
-     * 参考: test-server.mjs 的实现
+     * 发送媒体消息（图片）
+     * OpenClaw outbound 适配器要求的接口
      */
-    sendImage: async (params: {
+    sendMedia: async (params: {
       cfg: PluginConfig;
       accountId?: string;
       to: string;
-      imageUrl: string;
+      mediaUrl: string;
+      text?: string;
+      mimeType?: string;
     }): Promise<{
       channel: string;
       ok: boolean;
       messageId: string;
       error?: Error;
     }> => {
-      const account = resolveWecomAppAccount({ 
-        cfg: params.cfg, 
-        accountId: params.accountId 
+      const account = resolveWecomAppAccount({
+        cfg: params.cfg,
+        accountId: params.accountId,
       });
 
       if (!account.canSendActive) {
@@ -344,8 +344,8 @@ export const wecomAppPlugin = {
       try {
         // 使用 api.ts 中的 downloadAndSendImage 函数
         // 流程: 下载图片 → 上传素材 → 发送图片
-        const result = await downloadAndSendImage(account, target, params.imageUrl);
-        
+        const result = await downloadAndSendImage(account, target, params.mediaUrl);
+
         return {
           channel: "wecom-app",
           ok: result.ok,
@@ -361,7 +361,6 @@ export const wecomAppPlugin = {
         };
       }
     },
-
   },
 
   gateway: {
