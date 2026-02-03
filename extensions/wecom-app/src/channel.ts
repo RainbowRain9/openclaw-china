@@ -308,17 +308,23 @@ export const wecomAppPlugin = {
       messageId: string;
       error?: Error;
     }> => {
+      console.log(`[wecom-app] sendMedia called: to=${params.to}, mediaUrl=${params.mediaUrl}`);
+
       const account = resolveWecomAppAccount({
         cfg: params.cfg,
         accountId: params.accountId,
       });
 
+      console.log(`[wecom-app] Account resolved: canSendActive=${account.canSendActive}`);
+
       if (!account.canSendActive) {
+        const error = new Error("Account not configured for active sending (missing corpId, corpSecret, or agentId)");
+        console.error(`[wecom-app] sendMedia error:`, error.message);
         return {
           channel: "wecom-app",
           ok: false,
           messageId: "",
-          error: new Error("Account not configured for active sending (missing corpId, corpSecret, or agentId)"),
+          error,
         };
       }
 
@@ -341,10 +347,14 @@ export const wecomAppPlugin = {
         target = { userId: to };
       }
 
+      console.log(`[wecom-app] Target parsed:`, target);
+
       try {
         // 使用 api.ts 中的 downloadAndSendImage 函数
         // 流程: 下载图片 → 上传素材 → 发送图片
         const result = await downloadAndSendImage(account, target, params.mediaUrl);
+
+        console.log(`[wecom-app] downloadAndSendImage returned: ok=${result.ok}, msgid=${result.msgid}, errcode=${result.errcode}, errmsg=${result.errmsg}`);
 
         return {
           channel: "wecom-app",
@@ -353,6 +363,7 @@ export const wecomAppPlugin = {
           error: result.ok ? undefined : new Error(result.errmsg ?? "send failed"),
         };
       } catch (err) {
+        console.error(`[wecom-app] sendMedia catch error:`, err);
         return {
           channel: "wecom-app",
           ok: false,

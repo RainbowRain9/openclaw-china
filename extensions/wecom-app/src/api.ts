@@ -295,17 +295,46 @@ export async function sendWecomAppMarkdownMessage(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * MIME 类型映射表
+ */
+const MIME_TYPE_MAP: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.bmp': 'image/bmp',
+  '.webp': 'image/webp',
+} as const;
+
+/**
+ * 根据文件扩展名获取 MIME 类型
+ */
+function getMimeType(filename: string, contentType?: string): string {
+  // 优先使用响应头的 Content-Type
+  if (contentType) {
+    return contentType.split(';')[0].trim();
+  }
+
+  // 回退到文件扩展名推断
+  const ext = filename.toLowerCase().match(/\.[^.]+$/)?.[0];
+  return MIME_TYPE_MAP[ext || ''] || 'image/jpeg';
+}
+
+/**
  * 下载图片
  * @param imageUrl 图片 URL
  * @returns 图片 Buffer
  */
-export async function downloadImage(imageUrl: string): Promise<Buffer> {
+export async function downloadImage(imageUrl: string): Promise<{ buffer: Buffer; contentType?: string }> {
   const resp = await fetch(imageUrl);
   if (!resp.ok) {
     throw new Error(`Download image failed: HTTP ${resp.status}`);
   }
   const arrayBuffer = await resp.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    contentType: resp.headers.get('content-type') || undefined,
+  };
 }
 
 /**
@@ -313,25 +342,28 @@ export async function downloadImage(imageUrl: string): Promise<Buffer> {
  * @param account 账户配置
  * @param imageBuffer 图片数据
  * @param filename 文件名
+ * @param contentType MIME 类型（可选）
  * @returns media_id
  */
 export async function uploadImageMedia(
   account: ResolvedWecomAppAccount,
   imageBuffer: Buffer,
-  filename = "image.jpg"
+  filename = "image.jpg",
+  contentType?: string
 ): Promise<string> {
   if (!account.canSendActive) {
     throw new Error("Account not configured for active sending");
   }
 
   const token = await getAccessToken(account);
+  const mimeType = getMimeType(filename, contentType);
   const boundary = `----FormBoundary${Date.now()}`;
 
   // 构造 multipart/form-data
   const header = Buffer.from(
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="media"; filename="${filename}"\r\n` +
-    `Content-Type: image/jpeg\r\n\r\n`
+    `Content-Type: ${mimeType}\r\n\r\n`
   );
   const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
   const body = Buffer.concat([header, imageBuffer, footer]);
@@ -433,15 +465,30 @@ export async function downloadAndSendImage(
   imageUrl: string
 ): Promise<SendMessageResult> {
   try {
+    console.log(`[wecom-app] Downloading image from: ${imageUrl}`);
+
     // 1. 下载图片
-    const imageBuffer = await downloadImage(imageUrl);
+    const { buffer: imageBuffer, contentType } = await downloadImage(imageUrl);
+    console.log(`[wecom-app] Image downloaded, size: ${imageBuffer.length} bytes, contentType: ${contentType || 'unknown'}`);
 
-    // 2. 上传获取 media_id
-    const mediaId = await uploadImageMedia(account, imageBuffer, "image.jpg");
+    // 2. 提取文件扩展名
+    const extMatch = imageUrl.match(/\.([^.]+)$/);
+    const ext = extMatch ? `.${extMatch[1]}` : '.jpg';
+    const filename = `image${ext}`;
 
-    // 3. 发送图片消息
-    return await sendWecomAppImageMessage(account, target, mediaId);
+    // 3. 上传获取 media_id
+    console.log(`[wecom-app] Uploading image to WeCom media API, filename: ${filename}`);
+    const mediaId = await uploadImageMedia(account, imageBuffer, filename, contentType);
+    console.log(`[wecom-app] Image uploaded, media_id: ${mediaId}`);
+
+    // 4. 发送图片消息
+    console.log(`[wecom-app] Sending image to target:`, target);
+    const result = await sendWecomAppImageMessage(account, target, mediaId);
+    console.log(`[wecom-app] Image sent, ok: ${result.ok}, msgid: ${result.msgid}, errcode: ${result.errcode}, errmsg: ${result.errmsg}`);
+
+    return result;
   } catch (err) {
+    console.error(`[wecom-app] downloadAndSendImage error:`, err);
     return {
       ok: false,
       errcode: -1,
