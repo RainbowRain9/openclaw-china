@@ -235,16 +235,12 @@ export async function downloadWecomMediaToFile(
   mediaId: string,
   opts: { dir: string; maxBytes: number; prefix?: string }
 ): Promise<SavedInboundMedia> {
-  if (!account.canSendActive) {
-    return { ok: false, error: "Account not configured for active sending (missing corpId/corpSecret/agentId)" };
-  }
-
   const raw = String(mediaId ?? "").trim();
   if (!raw) return { ok: false, error: "mediaId/url is empty" };
 
   // Support both WeCom media_id and direct http(s) url.
-  // - media_id: use qyapi media/get
-  // - url: download directly
+  // - media_id: use qyapi media/get (requires corpId/corpSecret for access_token)
+  // - url: download directly (no auth needed)
   const isHttp = raw.startsWith("http://") || raw.startsWith("https://");
 
   let resp: Response;
@@ -259,6 +255,10 @@ export async function downloadWecomMediaToFile(
     contentType = resp.headers.get("content-type") || undefined;
     filenameFromHeader = undefined;
   } else {
+    // media_id download requires corpId/corpSecret (for access_token), but NOT agentId
+    if (!account.corpId || !account.corpSecret) {
+      return { ok: false, error: "Account not configured for media download (missing corpId/corpSecret)" };
+    }
     const safeMediaId = raw;
     const token = await getAccessToken(account);
     const url = `https://qyapi.weixin.qq.com/cgi-bin/media/get?access_token=${encodeURIComponent(token)}&media_id=${encodeURIComponent(safeMediaId)}`;
