@@ -48,14 +48,14 @@ export {
   stripMarkdown,
   clearAccessTokenCache,
   clearAllAccessTokenCache,
-} from "./src/api.js";
+  sendImage,  // 导出 sendImage 方法
+} from "./src/channel.js";  // 改为从 channel.js 导出
 
 // 导出类型
 export type {
   WecomAppConfig,
   ResolvedWecomAppAccount,
-  WecomAppInboundMessage,
-  WecomAppSendTarget,
+  WecomAppInboundAppMessage,
   WecomAppDmPolicy,
   WecomAppGroupPolicy,
   AccessTokenCacheEntry,

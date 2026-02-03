@@ -361,6 +361,74 @@ export const wecomAppPlugin = {
         };
       }
     },
+
+    /**
+     * 主动发送图片消息
+     * 
+     * 流程: 下载图片 → 上传素材 → 发送图片
+     * 参考: test-server.mjs 的实现
+     */
+    sendImage: async (params: {
+      cfg: PluginConfig;
+      accountId?: string;
+      to: string;
+      imageUrl: string;
+    }): Promise<{
+      channel: string;
+      ok: boolean;
+      messageId: string;
+      error?: Error;
+    }> => {
+      const account = resolveWecomAppAccount({ cfg: params.cfg, accountId: params.accountId });
+
+      if (!account.canSendActive) {
+        return {
+          channel: "wecom-app",
+          ok: false,
+          messageId: "",
+          error: new Error("Account not configured for active sending (missing corpId, corpSecret, or agentId)"),
+        };
+      }
+
+      // 解析 to: 支持格式 "wecom-app:user:xxx" / "wecom-app:group:xxx" / "wecom-app:xxx" / "user:xxx" / "group:xxx" / "xxx"
+      let to = params.to;
+
+      // 1. 先剥离 channel 前缀 "wecom-app:"
+      const channelPrefix = "wecom-app:";
+      if (to.startsWith(channelPrefix)) {
+        to = to.slice(channelPrefix.length);
+      }
+
+      // 2. 解析剩余部分: "group:xxx" / "user:xxx" / "xxx"
+      let target: { userId?: string; chatid?: string } = {};
+      if (to.startsWith("group:")) {
+        target = { chatid: to.slice(6) };
+      } else if (to.startsWith("user:")) {
+        target = { userId: to.slice(5) };
+      } else {
+        target = { userId: to };
+      }
+
+      try {
+        // 使用 api.ts 中的 downloadAndSendImage 函数
+        // 流程: 下载图片 → 上传素材 → 发送图片
+        const result = await downloadAndSendImage(account, target, params.imageUrl);
+        
+        return {
+          channel: "wecom-app",
+          ok: result.ok,
+          messageId: result.msgid ?? "",
+          error: result.ok ? undefined : new Error(result.errmsg ?? "send failed"),
+        };
+      } catch (err) {
+        return {
+          channel: "wecom-app",
+          ok: false,
+          messageId: "",
+          error: err instanceof Error ? err : new Error(String(err)),
+        };
+      }
+    },
   },
 
   gateway: {

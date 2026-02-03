@@ -42,6 +42,8 @@ import {
   stripMarkdown,
   clearAccessTokenCache,
   clearAllAccessTokenCache,
+  sendImageToUser,
+  quickSendImage,
 } from "@openclaw-china/wecom-app";
 import wecomAppEntry from "@openclaw-china/wecom-app";
 
@@ -70,6 +72,9 @@ export {
   stripMarkdown,
   clearAccessTokenCache,
   clearAllAccessTokenCache,
+  // 图片发送 API（供 Agent 直接调用）
+  sendImageToUser,
+  quickSendImage,
 };
 
 export type {
