@@ -22,6 +22,7 @@ import {
   extractFilesFromText,
   extractMediaFromText,
   isImagePath,
+  appendCronHiddenPrompt,
 } from "@openclaw-china/shared";
 import * as fs from "node:fs";
 
@@ -102,6 +103,8 @@ export interface InboundContext {
   Body: string;
   RawBody: string;
   CommandBody: string;
+  BodyForAgent?: string;
+  BodyForCommands?: string;
   From: string;
   To: string;
   SessionKey: string;
@@ -271,6 +274,22 @@ export async function handleFeishuMessage(params: {
     const finalCtx = core.channel.reply.finalizeInboundContext
       ? core.channel.reply.finalizeInboundContext(inboundCtx)
       : inboundCtx;
+
+    let cronBase = "";
+    if (typeof finalCtx.RawBody === "string" && finalCtx.RawBody) {
+      cronBase = finalCtx.RawBody;
+    } else if (typeof finalCtx.Body === "string" && finalCtx.Body) {
+      cronBase = finalCtx.Body;
+    } else if (typeof finalCtx.CommandBody === "string" && finalCtx.CommandBody) {
+      cronBase = finalCtx.CommandBody;
+    }
+
+    if (cronBase) {
+      const nextCron = appendCronHiddenPrompt(cronBase);
+      if (nextCron !== cronBase) {
+        finalCtx.BodyForAgent = nextCron;
+      }
+    }
 
     if (!channelCfg) {
       logger.warn("channel config missing, skipping dispatch");

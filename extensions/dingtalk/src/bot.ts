@@ -32,10 +32,13 @@ import {
   extractMediaFromText,
   normalizeLocalPath,
   isImagePath,
+  appendCronHiddenPrompt,
+  splitCronHiddenPrompt,
 } from "@openclaw-china/shared";
 
 function buildGatewayUserContent(inboundCtx: InboundContext, logger: Logger): string {
-  const base = inboundCtx.Body ?? "";
+  const base = inboundCtx.CommandBody ?? inboundCtx.Body ?? "";
+  const { base: baseText, prompt } = splitCronHiddenPrompt(base);
   const rawPaths: string[] = [];
 
   if (typeof inboundCtx.MediaPath === "string") {
@@ -58,11 +61,12 @@ function buildGatewayUserContent(inboundCtx: InboundContext, logger: Logger): st
   }
 
   if (files.size === 0) {
-    return base;
+    return prompt ? `${baseText}\n\n${prompt}` : baseText;
   }
 
   const list = Array.from(files).map((p) => `- ${p}`).join("\n");
-  return `${base}\n\n[local files]\n${list}`;
+  const content = `${baseText}\n\n[local files]\n${list}`;
+  return prompt ? `${content}\n\n${prompt}` : content;
 }
 
 /**
@@ -130,6 +134,29 @@ function extractMediaLinesFromText(params: {
     .filter((m): m is string => typeof m === "string" && m.trim().length > 0);
 
   return { text: result.text, mediaUrls };
+}
+
+function resolveAudioRecognition(raw: DingtalkRawMessage): string | undefined {
+  if (raw.msgtype !== "audio") return undefined;
+  if (!raw.content) return undefined;
+
+  const contentObj =
+    typeof raw.content === "string"
+      ? (() => {
+          try {
+            return JSON.parse(raw.content);
+          } catch {
+            return null;
+          }
+        })()
+      : raw.content;
+
+  if (!contentObj || typeof contentObj !== "object") return undefined;
+
+  const recognition = (contentObj as Record<string, unknown>).recognition;
+  if (typeof recognition !== "string") return undefined;
+  const trimmed = recognition.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function resolveGatewayAuthFromConfigFile(logger: Logger): string | undefined {
@@ -290,14 +317,11 @@ export function parseDingtalkMessage(raw: DingtalkRawMessage): DingtalkMessageCo
   if (raw.msgtype === "text" && raw.text?.content) {
     // 文本消息：提�?text.content
     content = raw.text.content.trim();
-  } else if (raw.msgtype === "audio" && raw.content) {
+  } else if (raw.msgtype === "audio") {
     // 音频消息：提取语音识别文�?content.recognition
-    // content 可能是字符串或对象，需要处�?
-    const contentObj = typeof raw.content === "string" 
-      ? (() => { try { return JSON.parse(raw.content); } catch { return null; } })()
-      : raw.content;
-    if (contentObj && typeof contentObj === "object" && "recognition" in contentObj && typeof contentObj.recognition === "string") {
-      content = contentObj.recognition.trim();
+    const recognition = resolveAudioRecognition(raw);
+    if (recognition) {
+      content = recognition;
     }
   }
   
@@ -349,6 +373,10 @@ export interface InboundContext {
   RawBody: string;
   /** 命令正文 */
   CommandBody: string;
+  /** 发送给 LLM 的正文（可选覆盖） */
+  BodyForAgent?: string;
+  /** 用于命令解析的正文（可选覆盖） */
+  BodyForCommands?: string;
   /** 发送方标识 */
   From: string;
   /** 接收方标�?*/
@@ -697,6 +725,7 @@ export async function handleDingtalkMessage(params: {
   // 解析消息
   const ctx = parseDingtalkMessage(raw);
   const isGroup = ctx.chatType === "group";
+  const audioRecognition = resolveAudioRecognition(raw);
   
   // 添加详细的原始消息调试日志
   logger.debug(`raw message: msgtype=${raw.msgtype}, hasText=${!!raw.text?.content}, hasContent=${!!raw.content}, textContent="${raw.text?.content ?? ""}"`);
@@ -817,39 +846,43 @@ export async function handleDingtalkMessage(params: {
     // 检测并处理媒体消息类型 (picture, video, audio, file)
     const mediaTypes: MediaMsgType[] = ["picture", "video", "audio", "file"];
     if (mediaTypes.includes(raw.msgtype as MediaMsgType)) {
-      try {
-        // 提取文件信息 (Requirement 9.1)
-        extractedFileInfo = extractFileFromMessage(raw);
-        
-        if (extractedFileInfo && channelCfg?.clientId && channelCfg?.clientSecret) {
-          // 获取 access token (Requirement 9.6)
-          const accessToken = await getAccessToken(channelCfg.clientId, channelCfg.clientSecret);
+      if (raw.msgtype === "audio" && audioRecognition) {
+        logger.debug("[audio] recognition present; treat as text and skip audio file download");
+      } else {
+        try {
+          // 提取文件信息 (Requirement 9.1)
+          extractedFileInfo = extractFileFromMessage(raw);
           
-          // 下载文件 (Requirement 9.2)
-          downloadedMedia = await downloadDingTalkFile({
-            downloadCode: extractedFileInfo.downloadCode,
-            robotCode: channelCfg.clientId,
-            accessToken,
-            fileName: extractedFileInfo.fileName,
-            msgType: extractedFileInfo.msgType,
-            log: logger,
-            maxFileSizeMB: channelCfg.maxFileSizeMB,
-          });
-          
-          logger.debug(`downloaded media file: ${downloadedMedia.path} (${downloadedMedia.size} bytes)`);
-          
-          // 构建消息正文 (Requirement 9.5)
-          mediaBody = buildFileContextMessage(
-            extractedFileInfo.msgType,
-            extractedFileInfo.fileName
-          );
+          if (extractedFileInfo && channelCfg?.clientId && channelCfg?.clientSecret) {
+            // 获取 access token (Requirement 9.6)
+            const accessToken = await getAccessToken(channelCfg.clientId, channelCfg.clientSecret);
+            
+            // 下载文件 (Requirement 9.2)
+            downloadedMedia = await downloadDingTalkFile({
+              downloadCode: extractedFileInfo.downloadCode,
+              robotCode: channelCfg.clientId,
+              accessToken,
+              fileName: extractedFileInfo.fileName,
+              msgType: extractedFileInfo.msgType,
+              log: logger,
+              maxFileSizeMB: channelCfg.maxFileSizeMB,
+            });
+            
+            logger.debug(`downloaded media file: ${downloadedMedia.path} (${downloadedMedia.size} bytes)`);
+            
+            // 构建消息正文 (Requirement 9.5)
+            mediaBody = buildFileContextMessage(
+              extractedFileInfo.msgType,
+              extractedFileInfo.fileName
+            );
+          }
+        } catch (err) {
+          // 优雅降级：记录警告并继续处理文本内容 (Requirement 9.4)
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          logger.warn(`media download failed, continuing with text: ${errorMessage}`);
+          downloadedMedia = null;
+          extractedFileInfo = null;
         }
-      } catch (err) {
-        // 优雅降级：记录警告并继续处理文本内容 (Requirement 9.4)
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        logger.warn(`media download failed, continuing with text: ${errorMessage}`);
-        downloadedMedia = null;
-        extractedFileInfo = null;
       }
     }
     
@@ -919,6 +952,9 @@ export async function handleDingtalkMessage(params: {
     
     // 构建入站上下�?
     const inboundCtx = buildInboundContext(ctx, (route as Record<string, unknown>)?.sessionKey as string, (route as Record<string, unknown>)?.accountId as string);
+    if (audioRecognition) {
+      inboundCtx.Transcript = audioRecognition;
+    }
     
     // 设置媒体相关字段 (Requirements 7.1-7.8)
     if (downloadedMedia) {
@@ -973,6 +1009,28 @@ export async function handleDingtalkMessage(params: {
       | ((ctx: InboundContext) => InboundContext)
       | undefined;
     const finalCtx = finalizeInboundContext ? finalizeInboundContext(inboundCtx) : inboundCtx;
+
+    let cronSource = "";
+    let cronBase = "";
+    if (typeof finalCtx.RawBody === "string" && finalCtx.RawBody) {
+      cronSource = "RawBody";
+      cronBase = finalCtx.RawBody;
+    } else if (typeof finalCtx.Body === "string" && finalCtx.Body) {
+      cronSource = "Body";
+      cronBase = finalCtx.Body;
+    } else if (typeof finalCtx.CommandBody === "string" && finalCtx.CommandBody) {
+      cronSource = "CommandBody";
+      cronBase = finalCtx.CommandBody;
+    }
+
+    if (cronBase) {
+      const nextCron = appendCronHiddenPrompt(cronBase);
+      const injected = nextCron !== cronBase;
+      if (injected) {
+        // 只覆盖发送给 LLM 的正文，避免污染 Body/RawBody
+        finalCtx.BodyForAgent = nextCron;
+      }
+    }
 
     // 记录 inbound session，用于 last route（cron/heartbeat 依赖）
     const channelSession = coreChannel?.session as

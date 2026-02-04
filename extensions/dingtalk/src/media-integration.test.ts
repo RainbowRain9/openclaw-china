@@ -40,7 +40,8 @@ function assignMediaFieldsToContext(
   extractedFileInfo: ExtractedFileInfo | null,
   downloadedRichTextImages: DownloadedFile[],
   mediaBody: string | null,
-  richTextParseResult?: { textParts: string[]; imageCodes: string[]; mentions: string[] } | null
+  richTextParseResult?: { textParts: string[]; imageCodes: string[]; mentions: string[] } | null,
+  audioRecognition?: string | null
 ): InboundContext {
   const ctx = { ...inboundCtx };
 
@@ -66,6 +67,10 @@ function assignMediaFieldsToContext(
     if (extractedFileInfo?.msgType === "audio" && extractedFileInfo.recognition) {
       ctx.Transcript = extractedFileInfo.recognition;
     }
+  }
+
+  if (audioRecognition && !ctx.Transcript) {
+    ctx.Transcript = audioRecognition;
   }
 
   if (downloadedRichTextImages.length > 0) {
@@ -298,8 +303,8 @@ describe("Integration: Media Message Flow (Task 10.1)", () => {
     });
   });
 
-  describe("Audio message → download → InboundContext with Transcript", () => {
-    it("should extract audio info and set Transcript for audio message", () => {
+  describe("Audio message handling", () => {
+    it("should treat audio with recognition as text and skip media fields", () => {
       const rawMessage: DingtalkRawMessage = {
         senderId: "user-123",
         senderNick: "Test User",
@@ -322,18 +327,60 @@ describe("Integration: Media Message Flow (Task 10.1)", () => {
       expect(extractedFileInfo?.duration).toBe(5000);
       expect(extractedFileInfo?.recognition).toBe("Hello, this is a voice message");
 
-      // Simulate successful download
+      const baseCtx = createBaseMessageContext({
+        contentType: "audio",
+        content: "Hello, this is a voice message",
+      });
+      const inboundCtx = buildInboundContext(baseCtx, "session-key", "account-id");
+
+      const finalCtx = assignMediaFieldsToContext(
+        inboundCtx,
+        null,
+        null,
+        [],
+        null,
+        null,
+        "Hello, this is a voice message"
+      );
+
+      expect(finalCtx.Body).toBe("Hello, this is a voice message");
+      expect(finalCtx.MediaPath).toBeUndefined();
+      expect(finalCtx.MediaType).toBeUndefined();
+      expect(finalCtx.Transcript).toBe("Hello, this is a voice message");
+    });
+
+    it("should treat audio without recognition as a file message", () => {
+      const rawMessage: DingtalkRawMessage = {
+        senderId: "user-123",
+        senderNick: "Test User",
+        conversationType: "1",
+        conversationId: "conv-456",
+        msgtype: "audio",
+        content: {
+          downloadCode: "audio-download-code-445",
+          duration: 5000,
+        },
+        robotCode: "robot-001",
+      };
+
+      const extractedFileInfo = extractFileFromMessage(rawMessage);
+
+      expect(extractedFileInfo).not.toBeNull();
+      expect(extractedFileInfo?.downloadCode).toBe("audio-download-code-445");
+      expect(extractedFileInfo?.msgType).toBe("audio");
+      expect(extractedFileInfo?.duration).toBe(5000);
+      expect(extractedFileInfo?.recognition).toBeUndefined();
+
       const downloadedMedia: DownloadedFile = {
-        path: "/tmp/dingtalk-file-444555.amr",
+        path: "/tmp/dingtalk-file-444556.amr",
         contentType: "audio/amr",
         size: 51200,
       };
 
-      const baseCtx = createBaseMessageContext({ contentType: "audio" });
+      const baseCtx = createBaseMessageContext({ contentType: "audio", content: "" });
       const inboundCtx = buildInboundContext(baseCtx, "session-key", "account-id");
 
       const mediaBody = buildFileContextMessage("audio");
-      // Check it's an audio message format
       expect(mediaBody).toMatch(/^\[.+\]$/);
       expect(mediaBody.length).toBeGreaterThan(2);
 
@@ -345,11 +392,9 @@ describe("Integration: Media Message Flow (Task 10.1)", () => {
         mediaBody
       );
 
-      // Assert: Transcript is set (Requirement 7.7)
-      expect(finalCtx.MediaPath).toBe("/tmp/dingtalk-file-444555.amr");
+      expect(finalCtx.MediaPath).toBe("/tmp/dingtalk-file-444556.amr");
       expect(finalCtx.MediaType).toBe("audio/amr");
-      expect(finalCtx.Transcript).toBe("Hello, this is a voice message");
-      // Body should be set to audio message format
+      expect(finalCtx.Transcript).toBeUndefined();
       expect(finalCtx.Body).toMatch(/^\[.+\]$/);
     });
   });
