@@ -21,20 +21,20 @@
 
 **【全网首发】钉钉支持文件接受和发送**
 
-| 功能 | 钉钉 | 飞书 | 企业微信智能机器人 | 企业微信自建应用（可接入普通微信） |
-|------|:----:|:----:|:------------------:|:----------------:|
-| 文本消息 | ✅ | ✅ | ✅ | ✅ |
-| Markdown | ✅ | ✅ | ✅ | ✅ |
-| 流式响应 | ✅ | 🚧 开发中 | ✅ stream 回调 | ❌ |
-| 图片/文件 | ✅  | ✅可接收 | ✅ 可接收 | ✅ 主动发送（支持网络 URL 和本地文件） |
-| 语音消息 | ✅  | 🚧 开发中 | ✅ 仅接收（语音文本） | ✅ 仅接收 |
-| 私聊 | ✅ | ✅ | ✅ | ✅ |
-| 群聊 | ✅ | ✅ | ✅ | ✅ |
-| @机器人检测 | ✅ | ✅ | ❌（未显式解析@） | ❌ |
-| 多账户 | 🚧 开发中 | 🚧 开发中 | ✅ | ✅ |
-| 主动发送消息 | ✅ | ✅ | ❌ | ✅（文本、图片、Markdown） |
-| 连接方式 | Stream 长连接 | WebSocket 长连接 | HTTPS 回调 | HTTPS 回调 |
-| Access Token 缓存 | - | - | - | ✅（2 小时有效期） |
+| 功能 | 钉钉 | 飞书 | QQ | 企业微信智能机器人 | 企业微信自建应用（可接入普通微信） |
+|------|:----:|:----:|:--:|:------------------:|:----------------:|
+| 文本消息 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Markdown | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 流式响应 | ✅ | 🚧 开发中 | ❌ | ✅ stream 回调 | ❌ |
+| 图片/文件 | ✅  | ✅可接收 | 🚧 开发中 | ✅ 可接收 | ✅ 主动发送（支持网络 URL 和本地文件） |
+| 语音消息 | ✅  | 🚧 开发中 | ❌ | ✅ 仅接收（语音文本） | ✅ 仅接收 |
+| 私聊 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 群聊 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| @机器人检测 | ✅ | ✅ | ✅ | ❌（未显式解析@） | ❌ |
+| 多账户 | 🚧 开发中 | 🚧 开发中 | 🚧 开发中 | ✅ | ✅ |
+| 主动发送消息 | ✅ | ✅ | ✅ | ❌ | ✅（文本、图片、Markdown） |
+| 连接方式 | Stream 长连接 | WebSocket 长连接 | - | HTTPS 回调 | HTTPS 回调 |
+| Access Token 缓存 | - | - | - | - | ✅（2 小时有效期） |
 
 > 💡 **钉钉 AI Card** 支持打字机效果的流式输出，体验最佳。启用方式：`enableAICard: true`
 >
@@ -75,6 +75,10 @@ openclaw plugins install @openclaw-china/feishu
 ```
 
 ```bash
+openclaw plugins install @openclaw-china/qqbot
+```
+
+```bash
 openclaw plugins install @openclaw-china/wecom-app
 ```
 
@@ -94,8 +98,8 @@ openclaw plugins update channels
 > ⚠️ **Windows 用户注意**：由于 OpenClaw 存在 Windows 兼容性问题（`spawn npm ENOENT`），npm 安装方式暂不可用，请使用方式二。
 
 ```bash
-git clone https://github.com/BytePioneer-AI/moltbot-china.git
-cd moltbot-china
+git clone https://github.com/BytePioneer-AI/openclaw-china.git
+cd openclaw-china
 pnpm install
 pnpm build
 openclaw plugins install -l ./packages/channels
@@ -205,6 +209,17 @@ openclaw config set channels.wecom.encodingAESKey your-43-char-encoding-aes-key
 
 
 
+#### QQ
+
+> 📖 **[QQ 渠道配置指南](doc/guides/qqbot/configuration.md)**
+
+```bash
+openclaw config set channels.qqbot.enabled true
+openclaw config set channels.qqbot.appId your-app-id
+openclaw config set channels.qqbot.clientSecret your-app-secret
+openclaw config set channels.qqbot.markdownSupport true
+```
+
 #### 飞书
 
 > 飞书应用需开启机器人能力，并使用「长连接接收消息」模式
@@ -293,8 +308,8 @@ cp -a /path/to/openclaw-china/skills/wecom-app-ops ~/.openclaw/skills/
 
 ```bash
 # 克隆仓库
-git clone https://github.com/BytePioneer-AI/moltbot-china.git
-cd moltbot-china
+git clone https://github.com/BytePioneer-AI/openclaw-china.git
+cd openclaw-china
 
 # 安装依赖并构建
 pnpm install
@@ -320,6 +335,11 @@ openclaw plugins install -l ./packages/channels
     "dingtalk": {
       "enabled": true,
       "clientId": "dingxxxxxx",
+      "clientSecret": "your-app-secret"
+    },
+    "qqbot": {
+      "enabled": true,
+      "appId": "your-app-id",
       "clientSecret": "your-app-secret"
     },
     "feishu": {

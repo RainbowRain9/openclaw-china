@@ -87,6 +87,37 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  extensions/qqbot:
+    dependencies:
+      '@openclaw-china/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      moltbot:
+        specifier: '>=0.1.0'
+        version: 0.1.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.7
+      '@types/ws':
+        specifier: ^8.5.0
+        version: 8.18.1
+      tsup:
+        specifier: ^8.2.0
+        version: 8.5.1(postcss@8.5.6)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.7)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
   extensions/wecom:
     dependencies:
       '@openclaw-china/shared':
@@ -151,6 +182,9 @@ importers:
       '@openclaw-china/feishu':
         specifier: 0.1.5
         version: link:../../extensions/feishu
+      '@openclaw-china/qqbot':
+        specifier: 0.1.0
+        version: link:../../extensions/qqbot
       '@openclaw-china/wecom':
         specifier: 0.1.3
         version: link:../../extensions/wecom
@@ -744,6 +778,9 @@ packages:
 
   '@types/node@22.19.7':
     resolution: {integrity: sha512-MciR4AKGHWl7xwxkBa6xUGxQJ4VBOmPTF7sL+iGzuahOFaO0jHCsuEfS80pan1ef4gWId1oWOweIhrDEYLuaOw==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@vitest/expect@2.1.9':
     resolution: {integrity: sha512-UJCIkTBenHeKT1TTlKMJWy1laZewsRIzYighyYiJKZreqtdxSos/S1t+ktRMQWu2CKqaarrkeszJx1cgC5tGZw==}
@@ -1642,6 +1679,10 @@ snapshots:
   '@types/node@22.19.7':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 22.19.7
 
   '@vitest/expect@2.1.9':
     dependencies:

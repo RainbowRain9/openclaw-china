@@ -1,0 +1,112 @@
+{
+  "name": "@openclaw-china/qqbot",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Moltbot QQ Bot channel plugin",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "moltbot.plugin.json",
+    "clawdbot.plugin.json",
+    "openclaw.plugin.json"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "channel": {
+      "id": "qqbot",
+      "label": "QQ Bot",
+      "selectionLabel": "QQ Bot",
+      "docsPath": "/channels/qqbot",
+      "blurb": "QQ 开放平台机器人消息",
+      "aliases": [
+        "qq"
+      ],
+      "order": 72
+    },
+    "install": {
+      "npmSpec": "@openclaw-china/qqbot",
+      "localPath": ".",
+      "defaultChoice": "npm"
+    }
+  },
+  "moltbot": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "channel": {
+      "id": "qqbot",
+      "label": "QQ Bot",
+      "selectionLabel": "QQ Bot",
+      "docsPath": "/channels/qqbot",
+      "blurb": "QQ 开放平台机器人消息",
+      "aliases": [
+        "qq"
+      ],
+      "order": 72
+    },
+    "install": {
+      "npmSpec": "@openclaw-china/qqbot",
+      "localPath": ".",
+      "defaultChoice": "npm"
+    }
+  },
+  "clawdbot": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "channel": {
+      "id": "qqbot",
+      "label": "QQ Bot",
+      "selectionLabel": "QQ Bot",
+      "docsPath": "/channels/qqbot",
+      "blurb": "QQ 开放平台机器人消息",
+      "aliases": [
+        "qq"
+      ],
+      "order": 72
+    },
+    "install": {
+      "npmSpec": "@openclaw-china/qqbot",
+      "localPath": ".",
+      "defaultChoice": "npm"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "release": "npm run build && npm publish"
+  },
+  "dependencies": {
+    "@openclaw-china/shared": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "tsup": "^8.2.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0",
+    "zod": "^3.23.0"
+  },
+  "peerDependencies": {
+    "moltbot": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "moltbot": {
+      "optional": true
+    }
+  },
+  "private": false
+}

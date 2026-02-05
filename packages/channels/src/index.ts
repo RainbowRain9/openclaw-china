@@ -46,6 +46,13 @@ import {
   sendWecomAppImageMessage,
 } from "@openclaw-china/wecom-app";
 import wecomAppEntry from "@openclaw-china/wecom-app";
+import {
+  qqbotPlugin,
+  DEFAULT_ACCOUNT_ID as QQBOT_DEFAULT_ACCOUNT_ID,
+  setQQBotRuntime,
+  getQQBotRuntime,
+} from "@openclaw-china/qqbot";
+import qqbotEntry from "@openclaw-china/qqbot";
 
 export {
   dingtalkPlugin,
@@ -74,6 +81,10 @@ export {
   clearAllAccessTokenCache,
   downloadAndSendImage,
   sendWecomAppImageMessage,
+  qqbotPlugin,
+  QQBOT_DEFAULT_ACCOUNT_ID,
+  setQQBotRuntime,
+  getQQBotRuntime,
 };
 
 export type {
@@ -96,6 +107,7 @@ export type {
   WecomAppSendTarget,
   AccessTokenCacheEntry,
 } from "@openclaw-china/wecom-app";
+export type { QQBotConfig, ResolvedQQBotAccount, QQBotSendResult } from "@openclaw-china/qqbot";
 
 // TODO: 后续添加其他渠道
 // export { qqPlugin } from "@openclaw-china/qq";
@@ -119,6 +131,7 @@ export interface MoltbotConfig {
     feishu?: ChannelConfig;
     wecom?: ChannelConfig;
     "wecom-app"?: ChannelConfig;
+    qqbot?: ChannelConfig;
     qq?: ChannelConfig;
     [key: string]: ChannelConfig | undefined;
   };
@@ -138,7 +151,7 @@ export interface MoltbotPluginApi {
 /**
  * 支持的渠道列表
  */
-export const SUPPORTED_CHANNELS = ["dingtalk", "feishu", "wecom", "wecom-app"] as const;
+export const SUPPORTED_CHANNELS = ["dingtalk", "feishu", "wecom", "wecom-app", "qqbot"] as const;
 // TODO: 后续添加 "qq"
 
 export type SupportedChannel = (typeof SUPPORTED_CHANNELS)[number];
@@ -162,6 +175,11 @@ const channelPlugins: Record<SupportedChannel, { register: (api: MoltbotPluginAp
   "wecom-app": {
     register: (api: MoltbotPluginApi) => {
       wecomAppEntry.register(api);
+    },
+  },
+  qqbot: {
+    register: (api: MoltbotPluginApi) => {
+      qqbotEntry.register(api);
     },
   },
 };
@@ -223,7 +241,7 @@ export function registerChannelsByConfig(
 const channelsPlugin = {
   id: "channels",
   name: "Moltbot China Channels",
-  description: "统一渠道包，支持钉钉、飞书、企业微信、QQ",
+  description: "统一渠道包，支持钉钉、飞书、企业微信、QQ Bot",
 
   configSchema: {
     type: "object",
