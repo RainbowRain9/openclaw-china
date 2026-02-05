@@ -75,6 +75,10 @@ openclaw plugins install @openclaw-china/feishu
 ```
 
 ```bash
+openclaw plugins install @openclaw-china/wecom-app
+```
+
+```bash
 openclaw plugins install @openclaw-china/wecom
 ```
 

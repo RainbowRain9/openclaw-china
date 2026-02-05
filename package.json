@@ -15,6 +15,7 @@
     "build:dingtalk": "pnpm -F @openclaw-china/dingtalk build",
     "build:channels": "pnpm -F @openclaw-china/channels build",
     "release:all": "node scripts/release-all.mjs",
+    "release:channel": "node scripts/release-all.mjs",
     "clean": "pnpm -r clean",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit"
