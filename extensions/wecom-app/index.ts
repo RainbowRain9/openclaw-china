@@ -55,7 +55,6 @@ export {
 // 导出封装发送函数 (业务层推荐使用)
 export {
   sendWecomDM,
-  sendWecomGroup,
   sendWecom,
   normalizeTarget,
   parseTarget,
@@ -69,7 +68,6 @@ export type {
   ResolvedWecomAppAccount,
   WecomAppInboundMessage,
   WecomAppDmPolicy,
-  WecomAppGroupPolicy,
   WecomAppSendTarget,
   AccessTokenCacheEntry,
 } from "./src/types.js";

@@ -189,18 +189,19 @@ async function sendMessage(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 通用发送函数（自动识别目标类型）
+// 通用发送函数（自动识别目标格式）
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * 发送消息（自动识别目标类型）
+ * 发送消息（自动识别目标格式）
  *
- * 根据 target 前缀自动判断是私聊还是群聊：
- * - "user:xxx" 或无前缀 → 私聊
- * - "group:xxx" → 群聊
+ * 支持多种 target 格式：
+ * - "user:xxx" → 私聊
+ * - "wecom-app:user:xxx" → 私聊（带 channel 前缀）
+ * - "xxx" → 私聊（裸 ID，默认当作用户）
  *
  * @param account - 已解析的账户配置
- * @param target - 目标（支持 "user:xxx"、"group:xxx"、"xxx" 格式）
+ * @param target - 目标（支持 "user:xxx"、"wecom-app:user:xxx"、"xxx" 格式）
  * @param options - 消息选项
  */
 export async function sendWecom(
@@ -222,7 +223,7 @@ export async function sendWecom(
     normalizedTarget = normalizedTarget.slice(channelPrefix.length);
   }
 
-  // 解析目标
+  // 解析目标（只支持 user:）
   const parsedTarget = parseTarget(normalizedTarget);
 
   return sendMessage(account, parsedTarget, options);
