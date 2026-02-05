@@ -1068,6 +1068,13 @@ export async function downloadAndSendVoice(
   try {
     console.log(`[wecom-app] Downloading voice from: ${voiceUrl}`);
 
+    // 企业微信语音消息通常要求 AMR/Speex 等格式。
+    // WAV 往往会导致上传/发送失败（ok=false）。这里提前做提示，方便用户定位。
+    const voiceExt = (voiceUrl.split("?")[0].match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
+    if (voiceExt === "wav") {
+      console.warn(`[wecom-app] Voice format is .wav; WeCom usually expects .amr/.speex. Consider converting to .amr before sending.`);
+    }
+
     // 1. 下载语音
     const { buffer: voiceBuffer, contentType } = await downloadVoice(voiceUrl);
     console.log(`[wecom-app] Voice downloaded, size: ${voiceBuffer.length} bytes, contentType: ${contentType || 'unknown'}`);
@@ -1090,10 +1097,19 @@ export async function downloadAndSendVoice(
     return result;
   } catch (err) {
     console.error(`[wecom-app] downloadAndSendVoice error:`, err);
+
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const voiceExt = (voiceUrl.split("?")[0].match(/\.([^.]+)$/)?.[1] || "").toLowerCase();
+
+    // 给用户更可操作的提示：wav 常见不兼容
+    const hint = voiceExt === "wav"
+      ? "WeCom voice usually requires .amr/.speex. Your file is .wav; please convert to .amr and retry. (e.g., ffmpeg -i in.wav -ar 8000 -ac 1 -c:a amr_nb out.amr)"
+      : "";
+
     return {
       ok: false,
       errcode: -1,
-      errmsg: err instanceof Error ? err.message : String(err),
+      errmsg: hint ? `${rawMsg} | hint: ${hint}` : rawMsg,
     };
   }
 }

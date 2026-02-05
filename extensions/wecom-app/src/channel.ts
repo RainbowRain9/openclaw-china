@@ -32,6 +32,13 @@ function detectMediaType(filePath: string, mimeType?: string): MediaType {
   // 优先使用 MIME 类型
   if (mimeType) {
     const mime = mimeType.split(";")[0].trim().toLowerCase();
+
+    // SVG 常见为 image/svg+xml，但企业微信通常不按“图片消息”展示/支持。
+    // 这里强制当作文件发送，避免误走 image 上传/发送流程。
+    if (mime.includes("svg")) {
+      return "file";
+    }
+
     if (mime.startsWith("image/")) {
       return "image";
     }
@@ -50,6 +57,11 @@ function detectMediaType(filePath: string, mimeType?: string): MediaType {
   const imageExts = ["jpg", "jpeg", "png", "gif", "bmp", "webp"];
   if (imageExts.includes(ext)) {
     return "image";
+  }
+
+  // SVG：多数情况下企业微信不按图片展示，改为文件
+  if (ext === "svg") {
+    return "file";
   }
 
   // 语音扩展名
