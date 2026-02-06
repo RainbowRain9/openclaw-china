@@ -10,6 +10,7 @@ export interface PluginRuntime {
       resolveAgentRoute?: (params: {
         cfg: unknown;
         channel: string;
+        accountId?: string;
         peer: { kind: string; id: string };
       }) => { sessionKey: string; accountId: string; agentId?: string };
     };

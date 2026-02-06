@@ -342,6 +342,7 @@ export async function dispatchWecomAppMessage(params: {
   const route = channel.routing.resolveAgentRoute({
     cfg: safeCfg,
     channel: "wecom-app",
+    accountId: account.accountId,
     peer: { kind: "dm", id: chatId },
   });
 
@@ -389,7 +390,7 @@ export async function dispatchWecomAppMessage(params: {
         From: from,
         To: to,
         SessionKey: route.sessionKey,
-        AccountId: route.accountId,
+        AccountId: route.accountId ?? account.accountId,
         ChatType: "direct",
         ConversationLabel: fromLabel,
         SenderName: senderId,
@@ -407,7 +408,7 @@ export async function dispatchWecomAppMessage(params: {
         From: from,
         To: to,
         SessionKey: route.sessionKey,
-        AccountId: route.accountId,
+        AccountId: route.accountId ?? account.accountId,
         ChatType: "direct",
         ConversationLabel: fromLabel,
         SenderName: senderId,
