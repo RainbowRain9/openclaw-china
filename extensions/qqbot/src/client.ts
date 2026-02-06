@@ -179,6 +179,29 @@ export async function sendChannelMessage(params: {
   });
 }
 
+export async function sendC2CInputNotify(params: {
+  accessToken: string;
+  openid: string;
+  messageId?: string;
+  inputSecond?: number;
+}): Promise<void> {
+  const msgSeq = nextMsgSeq(params.messageId);
+  await apiPost(
+    params.accessToken,
+    `/v2/users/${params.openid}/messages`,
+    {
+      msg_type: 6,
+      input_notify: {
+        input_type: 1,
+        input_second: params.inputSecond ?? 60,
+      },
+      msg_seq: msgSeq,
+      ...(params.messageId ? { msg_id: params.messageId } : {}),
+    },
+    { timeout: 15000 }
+  );
+}
+
 export enum MediaFileType {
   IMAGE = 1,
   VIDEO = 2,

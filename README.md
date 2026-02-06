@@ -18,20 +18,50 @@
   <em>您的支持是我们持续改进的动力</em>
 </p>
 
-| 平台 | 状态 | 配置指南 |
-|------|:----:|----------|
-| 钉钉 | ✅ 可用 | [钉钉企业注册指南](doc/guides/dingtalk/configuration.md) |
-| 企业微信（自建应用-可接入普通微信） | ✅ 可用 | [企业微信自建应用配置指南](doc/guides/wecom-app/configuration.md) |
-| QQ 机器人 | ✅ 可用 | [QQ 渠道配置指南](doc/guides/qqbot/configuration.md) |
-| 飞书 | ✅ 可用 | - |
-| 企业微信（智能机器人） | ✅ 可用 | - |
+<table align="center">
+  <thead>
+    <tr>
+      <th>平台</th>
+      <th>状态</th>
+      <th>配置指南</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>钉钉</td>
+      <td align="center">✅ 可用</td>
+      <td><a href="doc/guides/dingtalk/configuration.md">钉钉企业注册指南</a></td>
+    </tr>
+    <tr>
+      <td>企业微信（自建应用-可接入微信）</td>
+      <td align="center">✅ 可用</td>
+      <td><a href="doc/guides/wecom-app/configuration.md">企业微信自建应用配置指南</a></td>
+    </tr>
+    <tr>
+      <td>QQ 机器人</td>
+      <td align="center">✅ 可用</td>
+      <td><a href="doc/guides/qqbot/configuration.md">QQ 渠道配置指南</a></td>
+    </tr>
+    <tr>
+      <td>飞书</td>
+      <td align="center">✅ 可用</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td>企业微信（智能机器人）</td>
+      <td align="center">✅ 可用</td>
+      <td>-</td>
+    </tr>
+  </tbody>
+</table>
 
 
 ## 功能支持
 
-更多功能支持在努力开发中~
+更多功能在努力开发中~
 
-**【全网首发】钉钉支持文件接受和发送**
+- **【全网首发】钉钉、QQ、企微支持文件接受和发送**
+- **【全网首发】钉钉、QQ、飞书、企微支持定时任务**
 
 | 功能 | 钉钉 | 飞书 | QQ | 企业微信<br />智能机器人 | 企业微信自建应用<br />（可接入普通微信） |
 |------|:----:|:----:|:--:|:------------------:|:----------------:|

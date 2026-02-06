@@ -27,6 +27,7 @@ export interface QQInboundAttachment {
 export interface QQInboundMessage {
   type: QQChatType;
   senderId: string;
+  c2cOpenid?: string;
   senderName?: string;
   content: string;
   attachments?: QQInboundAttachment[];

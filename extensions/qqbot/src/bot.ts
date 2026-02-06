@@ -207,6 +207,7 @@ function parseC2CMessage(data: unknown): QQInboundMessage | null {
   return {
     type: "direct",
     senderId,
+    c2cOpenid: senderId,
     senderName: toString(author.username),
     content: text,
     attachments: attachments.length > 0 ? attachments : undefined,
@@ -475,6 +476,17 @@ async function dispatchToAgent(params: {
   }
 
   const target = resolveChatTarget(inbound);
+  if (inbound.c2cOpenid) {
+    const typing = await qqbotOutbound.sendTyping({
+      cfg: { channels: { qqbot: qqCfg } },
+      to: `user:${inbound.c2cOpenid}`,
+      replyToId: inbound.messageId,
+      inputSecond: 60,
+    });
+    if (typing.error) {
+      logger.warn(`sendTyping failed: ${typing.error}`);
+    }
+  }
   const route = routing({
     cfg,
     channel: "qqbot",
