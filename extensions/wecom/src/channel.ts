@@ -17,7 +17,7 @@ import {
   WecomConfigJsonSchema,
   type PluginConfig,
 } from "./config.js";
-import { registerWecomWebhookTarget } from "./monitor.js";
+import { appendWecomActiveStreamChunk, registerWecomWebhookTarget } from "./monitor.js";
 import { setWecomRuntime } from "./runtime.js";
 import {
   buildTempMediaUrl,
@@ -379,13 +379,26 @@ export const wecomPlugin = {
           error,
         };
       }
+      const replyTarget = resolveReplyTargetToken(parsed);
+      const streamAccepted = appendWecomActiveStreamChunk({
+        accountId: account.accountId,
+        to: replyTarget,
+        chunk: params.text,
+      });
+      if (streamAccepted) {
+        return {
+          channel: "wecom",
+          ok: true,
+          messageId: `stream:${Date.now()}`,
+        };
+      }
       const responseUrl = consumeResponseUrl({
         accountId: account.accountId,
-        to: resolveReplyTargetToken(parsed),
+        to: replyTarget,
       });
       if (!responseUrl) {
         const error = new Error(
-          `No response_url available for ${resolveReplyTargetToken(parsed)}. WeCom smart bot can only reply after inbound messages.`
+          `No response_url available for ${replyTarget}. WeCom smart bot can only reply after inbound messages.`
         );
         console.error(`[wecom] sendText failed: ${error.message}`);
         return {
@@ -453,22 +466,6 @@ export const wecomPlugin = {
           error,
         };
       }
-      const responseUrl = consumeResponseUrl({
-        accountId: account.accountId,
-        to: resolveReplyTargetToken(parsed),
-      });
-      if (!responseUrl) {
-        const error = new Error(
-          `No response_url available for ${resolveReplyTargetToken(parsed)}. WeCom smart bot can only reply after inbound messages.`
-        );
-        console.error(`[wecom] sendMedia failed: ${error.message}`);
-        return {
-          channel: "wecom",
-          ok: false,
-          messageId: "",
-          error,
-        };
-      }
 
       try {
         let publicMediaUrl = params.mediaUrl.trim();
@@ -499,6 +496,40 @@ export const wecomPlugin = {
           mediaType,
           caption: params.text,
         });
+        const replyTarget = resolveReplyTargetToken(parsed);
+        const streamAccepted = appendWecomActiveStreamChunk({
+          accountId: account.accountId,
+          to: replyTarget,
+          chunk: markdown,
+        });
+        if (streamAccepted) {
+          console.log(
+            `[wecom] sendMedia success (stream append): type=${mediaType}, to=${replyTarget}`
+          );
+          return {
+            channel: "wecom",
+            ok: true,
+            messageId: `stream:${Date.now()}`,
+          };
+        }
+
+        const responseUrl = consumeResponseUrl({
+          accountId: account.accountId,
+          to: replyTarget,
+        });
+        if (!responseUrl) {
+          const error = new Error(
+            `No response_url available for ${replyTarget}. WeCom smart bot can only reply after inbound messages.`
+          );
+          console.error(`[wecom] sendMedia failed: ${error.message}`);
+          return {
+            channel: "wecom",
+            ok: false,
+            messageId: "",
+            error,
+          };
+        }
+
         await postWecomResponse(responseUrl, {
           msgtype: "markdown",
           markdown: {
@@ -506,7 +537,7 @@ export const wecomPlugin = {
           },
         });
         console.log(
-          `[wecom] sendMedia success (markdown): type=${mediaType}, to=${resolveReplyTargetToken(parsed)}`
+          `[wecom] sendMedia success (markdown): type=${mediaType}, to=${replyTarget}`
         );
         return {
           channel: "wecom",

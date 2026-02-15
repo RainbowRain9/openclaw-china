@@ -157,7 +157,7 @@ describe("wecom webhook", () => {
     const replyPayload = JSON.parse(decryptedReply) as { msgtype?: string; stream?: { content?: string } };
 
     expect(replyPayload.msgtype).toBe("stream");
-    expect(replyPayload.stream?.content).toBe("1");
+    expect(replyPayload.stream?.content).toBe("稍等~");
 
     unregister();
   });

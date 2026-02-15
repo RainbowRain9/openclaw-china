@@ -34,9 +34,16 @@ type StreamState = {
   content: string;
 };
 
+type StreamBinding = {
+  accountId: string;
+  to: string;
+};
+
 const webhookTargets = new Map<string, WecomWebhookTarget[]>();
 const streams = new Map<string, StreamState>();
 const msgidToStreamId = new Map<string, string>();
+const streamBindings = new Map<string, StreamBinding>();
+const activeStreamByTarget = new Map<string, string>();
 
 const STREAM_TTL_MS = 10 * 60 * 1000;
 const STREAM_MAX_BYTES = 20_480;
@@ -55,6 +62,14 @@ function pruneStreams(): void {
   for (const [id, state] of streams.entries()) {
     if (state.updatedAt < cutoff) {
       streams.delete(id);
+      const binding = streamBindings.get(id);
+      if (binding) {
+        const key = `${binding.accountId}::${binding.to}`;
+        if (activeStreamByTarget.get(key) === id) {
+          activeStreamByTarget.delete(key);
+        }
+      }
+      streamBindings.delete(id);
     }
   }
   for (const [msgid, id] of msgidToStreamId.entries()) {
@@ -202,6 +217,38 @@ function appendStreamContent(state: StreamState, nextText: string): void {
   const content = state.content ? `${state.content}\n\n${nextText}`.trim() : nextText.trim();
   state.content = truncateUtf8Bytes(content, STREAM_MAX_BYTES);
   state.updatedAt = Date.now();
+}
+
+function bindActiveStream(params: { streamId: string; accountId: string; to: string }): void {
+  const accountId = params.accountId.trim();
+  const to = params.to.trim();
+  if (!accountId || !to) return;
+  streamBindings.set(params.streamId, { accountId, to });
+  activeStreamByTarget.set(`${accountId}::${to}`, params.streamId);
+}
+
+function unbindActiveStream(streamId: string): void {
+  const binding = streamBindings.get(streamId);
+  if (binding) {
+    const key = `${binding.accountId}::${binding.to}`;
+    if (activeStreamByTarget.get(key) === streamId) {
+      activeStreamByTarget.delete(key);
+    }
+  }
+  streamBindings.delete(streamId);
+}
+
+export function appendWecomActiveStreamChunk(params: { accountId: string; to: string; chunk: string }): boolean {
+  const accountId = params.accountId.trim();
+  const to = params.to.trim();
+  const chunk = params.chunk.trim();
+  if (!accountId || !to || !chunk) return false;
+  const streamId = activeStreamByTarget.get(`${accountId}::${to}`);
+  if (!streamId) return false;
+  const state = streams.get(streamId);
+  if (!state || state.finished) return false;
+  appendStreamContent(state, chunk);
+  return true;
 }
 
 function buildLogger(target: WecomWebhookTarget): Logger {
@@ -454,6 +501,9 @@ export async function handleWecomWebhookRequest(req: IncomingMessage, res: Serve
 
   const streamId = createStreamId();
   if (msgid) msgidToStreamId.set(msgid, streamId);
+  const senderId = String(msg.from?.userid ?? "").trim() || "unknown";
+  const chatType = String(msg.chattype ?? "").toLowerCase() === "group" ? "group" : "single";
+  const to = chatType === "group" ? `group:${String(msg.chatid ?? "").trim() || "unknown"}` : `user:${senderId}`;
   streams.set(streamId, {
     streamId,
     msgid,
@@ -462,6 +512,11 @@ export async function handleWecomWebhookRequest(req: IncomingMessage, res: Serve
     started: false,
     finished: false,
     content: "",
+  });
+  bindActiveStream({
+    streamId,
+    accountId: target.account.accountId,
+    to,
   });
 
   const core = tryGetWecomRuntime();
@@ -481,6 +536,7 @@ export async function handleWecomWebhookRequest(req: IncomingMessage, res: Serve
       }
       current.finished = true;
       current.updatedAt = Date.now();
+      unbindActiveStream(streamId);
     };
 
     const hooks = {
@@ -528,6 +584,7 @@ export async function handleWecomWebhookRequest(req: IncomingMessage, res: Serve
       state.finished = true;
       state.updatedAt = Date.now();
     }
+    unbindActiveStream(streamId);
   }
 
   await waitForStreamContent(streamId, INITIAL_STREAM_WAIT_MS);
