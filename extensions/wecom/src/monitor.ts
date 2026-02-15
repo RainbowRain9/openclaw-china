@@ -319,15 +319,29 @@ export function appendWecomActiveStreamChunk(params: {
   const chunk = params.chunk.trim();
   if (!accountId || !to || !chunk) return false;
 
-  const sessionKey = params.sessionKey?.trim();
-  if (sessionKey) {
-    const streamId = streamBySessionKey.get(sessionKey);
-    if (streamId && appendToStream(streamId, chunk)) return true;
-  }
-
   const runId = params.runId?.trim();
   if (runId) {
     const streamId = streamByRunId.get(runId);
+    if (streamId && appendToStream(streamId, chunk)) return true;
+
+    // When runId is present but not bound, avoid ambiguous fallbacks that can
+    // append chunks into another in-flight stream for the same session/user.
+    const candidates = Array.from(activeStreamIdsByTo.get(to) ?? []).filter((id) => isStreamActive(id));
+    if (candidates.length === 1) {
+      console.warn(`[wecom] append stream chunk fallback by unique to after runId miss: runId=${runId}, to=${to}`);
+      return appendToStream(candidates[0]!, chunk);
+    }
+    if (candidates.length > 1) {
+      console.warn(
+        `[wecom] append stream chunk dropped: runId=${runId} not bound and ${candidates.length} active streams share to=${to}`
+      );
+    }
+    return false;
+  }
+
+  const sessionKey = params.sessionKey?.trim();
+  if (sessionKey) {
+    const streamId = streamBySessionKey.get(sessionKey);
     if (streamId && appendToStream(streamId, chunk)) return true;
   }
 
