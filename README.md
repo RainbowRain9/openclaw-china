@@ -493,12 +493,13 @@ openclaw plugins install -l ./packages/channels
 
 **欢迎同学们一起开发~**
 
+<img src="https://github.com/user-attachments/assets/245d5730-f156-443c-908a-cf6b1f4ddbf2" alt="二维码" width="50%" />
 
 
-<img src="https://github.com/user-attachments/assets/697c25f4-7734-4f22-9c3b-36c287457bb8" alt="二维码" width="50%" />
+<img src="https://github.com/user-attachments/assets/39e55d57-1585-4798-9939-9f8a1ef1b1bb" alt="二维码" width="50%" />
 
 
-
+如果二维码过期，可以加下我微信备注说明来意：a28417416
 
 ## License
 
