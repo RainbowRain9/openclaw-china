@@ -15,7 +15,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { wecomAppPlugin, DEFAULT_ACCOUNT_ID } from "./src/channel.js";
 import { setWecomAppRuntime, getWecomAppRuntime } from "./src/runtime.js";
 import { handleWecomAppWebhookRequest } from "./src/monitor.js";
-import { registerChinaSetupCli } from "@openclaw-china/shared";
+import { registerChinaSetupCli, showChinaInstallHint } from "@openclaw-china/shared";
 import {
   sendWecomAppMessage,
   sendWecomAppMarkdownMessage,
@@ -84,6 +84,7 @@ const plugin = {
   },
   register(api: MoltbotPluginApi) {
     registerChinaSetupCli(api, { channels: ["wecom-app"] });
+    showChinaInstallHint(api);
 
     if (api.runtime) {
       setWecomAppRuntime(api.runtime as Record<string, unknown>);

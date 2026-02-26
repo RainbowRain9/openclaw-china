@@ -13,7 +13,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { wecomPlugin, DEFAULT_ACCOUNT_ID } from "./src/channel.js";
 import { setWecomRuntime, getWecomRuntime } from "./src/runtime.js";
 import { handleWecomWebhookRequest } from "./src/monitor.js";
-import { registerChinaSetupCli } from "@openclaw-china/shared";
+import { registerChinaSetupCli, showChinaInstallHint } from "@openclaw-china/shared";
 
 /**
  * Moltbot 插件 API 接口
@@ -45,6 +45,7 @@ const plugin = {
   },
   register(api: MoltbotPluginApi) {
     registerChinaSetupCli(api, { channels: ["wecom"] });
+    showChinaInstallHint(api);
 
     if (api.runtime) {
       setWecomRuntime(api.runtime as Record<string, unknown>);

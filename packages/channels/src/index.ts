@@ -53,7 +53,7 @@ import {
   getQQBotRuntime,
 } from "@openclaw-china/qqbot";
 import qqbotEntry from "@openclaw-china/qqbot";
-import { registerChinaSetupCli } from "@openclaw-china/shared";
+import { registerChinaSetupCli, showChinaInstallHint } from "@openclaw-china/shared";
 
 export {
   dingtalkPlugin,
@@ -168,12 +168,6 @@ export const SUPPORTED_CHANNELS = ["dingtalk", "feishu-china", "wecom", "wecom-a
 // TODO: 鍚庣画娣诲姞 "qq"
 
 export type SupportedChannel = (typeof SUPPORTED_CHANNELS)[number];
-const PROJECT_REPO = "https://github.com/BytePioneer-AI/moltbot-china";
-const DEBUG_COMMAND = "openclaw gateway --port 18789 --verbose";
-const ANSI_RESET = "\u001b[0m";
-const ANSI_LINK = "\u001b[1;4;96m";
-const ANSI_BORDER = "\u001b[92m";
-let hasShownPromoHint = false;
 
 const channelPlugins: Record<SupportedChannel, { register: (api: MoltbotPluginApi) => void }> = {
   dingtalk: {
@@ -202,47 +196,6 @@ const channelPlugins: Record<SupportedChannel, { register: (api: MoltbotPluginAp
     },
   },
 };
-
-function hasAnyEnabledChinaChannel(cfg?: MoltbotConfig): boolean {
-  const channels = cfg?.channels;
-  if (!channels) {
-    return false;
-  }
-  return SUPPORTED_CHANNELS.some((channelId) => Boolean(channels[channelId]?.enabled));
-}
-
-function showPromoHint(api: MoltbotPluginApi): void {
-  if (hasShownPromoHint || hasAnyEnabledChinaChannel(api.config)) {
-    return;
-  }
-  hasShownPromoHint = true;
-
-  const lines = [
-    `${ANSI_BORDER}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${ANSI_RESET}`,
-    "  OpenClaw China Channels 已就绪!",
-    `${ANSI_BORDER}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${ANSI_RESET}`,
-    "",
-    "项目仓库:",
-    `  ${ANSI_LINK}${PROJECT_REPO}${ANSI_RESET}`,
-    "",
-    "⭐ 如果这个项目对你有帮助，请给我们一个 Star！⭐",
-    "",
-    "下一步:",
-    `  ${DEBUG_COMMAND}`,
-  ];
-
-  if (api.logger?.info) {
-    for (const line of lines) {
-      api.logger.info(line);
-    }
-    return;
-  }
-  if (api.logger?.warn) {
-    for (const line of lines) {
-      api.logger.warn(line);
-    }
-  }
-}
 
 /**
  * 根据 Moltbot 配置注册启用的渠道
@@ -316,7 +269,7 @@ const channelsPlugin = {
    */
   register(api: MoltbotPluginApi) {
     registerChinaSetupCli(api, { channels: SUPPORTED_CHANNELS });
-    showPromoHint(api);
+    showChinaInstallHint(api);
     registerChannelsByConfig(api);
   },
 };
