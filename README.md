@@ -415,31 +415,6 @@ npx github:BytePioneer-AI/clawmate
 
 </details>
 
-## 配置选项
-
-> 通用字段适用于所有渠道；渠道专用字段仅在对应渠道生效。
-
-### 通用字段
-
-| 选项 | 说明 |
-|------|------|
-| `enabled` | 是否启用 |
-| `dmPolicy` | 私聊策略：`open`（任何人）/ `allowlist`（白名单） |
-| `groupPolicy` | 群聊策略：`open`（任何群）/ `allowlist`（白名单）/ `disabled`（禁用） |
-| `allowFrom` | 私聊白名单用户 ID |
-| `groupAllowFrom` | 群聊白名单群 ID |
-| `maxFileSizeMB` | 媒体文件大小限制 (MB)，默认 100 |
-
-
-### 会话配置（可选）
-
-`session.dmScope` 控制不同用户的会话隔离方式：
-
-| 值 | 说明 |
-|----|------|
-| `main` | 所有用户共享同一会话（不推荐） |
-| `per-peer` | **推荐**，按用户 ID 隔离 |
-| `per-channel-peer` | 按渠道 + 用户隔离 |
 
 ## 开发
 
@@ -509,6 +484,11 @@ openclaw china setup
 }
 ```
 
+</details>
+
+<details>
+<summary><strong>点击展开总体架构</strong></summary>
+
 
 ### 总体架构
 
@@ -560,6 +540,7 @@ flowchart TD
     style PluginGrid fill:#fffcf9,stroke:#fed7aa,stroke-dasharray: 5 5,color:#9a3412,rx:10,ry:10
     style SharedLayer fill:#f8fafc,stroke:#e2e8f0,stroke-dasharray: 5 5,color:#64748b,rx:10,ry:10
 ```
+
 </details>
 
 ## 加入交流群
