@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getUtf8ByteLength,
   splitTextByByteLimit,
+  truncateTextByByteLimit,
   WECHAT_TEXT_BYTE_LIMIT,
 } from "./text.js";
 
@@ -134,6 +135,62 @@ describe("wechat-mp text utils", () => {
       // Short text within limit is returned as-is
       expect(chunks).toHaveLength(1);
       expect(chunks[0]).toBe("   hello world   ");
+    });
+  });
+
+  describe("truncateTextByByteLimit", () => {
+    it("returns full text when within limit", () => {
+      const text = "hello world";
+      const truncated = truncateTextByByteLimit(text, 100);
+      expect(truncated).toBe(text);
+    });
+
+    it("truncates at exact byte limit boundary", () => {
+      const text = "a".repeat(3000);
+      const truncated = truncateTextByByteLimit(text, 1000);
+      expect(getUtf8ByteLength(truncated)).toBeLessThanOrEqual(1000);
+      expect(truncated.length).toBeLessThan(text.length);
+    });
+
+    it("truncates at paragraph boundary when possible", () => {
+      const part1 = "a".repeat(500);
+      const part2 = "b".repeat(500);
+      const text = `${part1}\n\n${part2}`;
+      const truncated = truncateTextByByteLimit(text, 600);
+
+      expect(truncated).toContain(part1);
+      expect(truncated).not.toContain(part2);
+    });
+
+    it("truncates at sentence boundary for Chinese text", () => {
+      const part1 = "中".repeat(200); // 600 bytes
+      const part2 = "文".repeat(200); // 600 bytes
+      const text = `${part1}。${part2}`;
+      const truncated = truncateTextByByteLimit(text, 700);
+
+      expect(getUtf8ByteLength(truncated)).toBeLessThanOrEqual(700);
+      expect(truncated).toContain(part1);
+    });
+
+    it("does not truncate multi-byte characters", () => {
+      // Create text that would be exactly at boundary
+      const chinese = "你".repeat(700); // 2100 bytes
+      const truncated = truncateTextByByteLimit(chinese, 1000);
+
+      // Verify no characters are corrupted - all characters should be valid
+      expect(() => Buffer.from(truncated, "utf8")).not.toThrow();
+      expect(getUtf8ByteLength(truncated)).toBeLessThanOrEqual(1000);
+    });
+
+    it("handles empty string", () => {
+      const truncated = truncateTextByByteLimit("", 100);
+      expect(truncated).toBe("");
+    });
+
+    it("handles very small limit", () => {
+      const text = "hello world";
+      const truncated = truncateTextByByteLimit(text, 5);
+      expect(getUtf8ByteLength(truncated)).toBeLessThanOrEqual(5);
     });
   });
 });

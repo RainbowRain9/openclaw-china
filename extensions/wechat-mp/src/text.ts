@@ -70,6 +70,41 @@ export function splitTextByByteLimit(
 }
 
 /**
+ * Truncate text to fit within a byte limit.
+ * Tries to find a good boundary (paragraph, sentence, space) for truncation.
+ *
+ * @param text - The text to truncate
+ * @param maxBytes - Maximum bytes for the result
+ * @returns Truncated text within the byte limit
+ */
+export function truncateTextByByteLimit(
+  text: string,
+  maxBytes: number = WECHAT_TEXT_BYTE_LIMIT
+): string {
+  if (getUtf8ByteLength(text) <= maxBytes) {
+    return text;
+  }
+
+  // Find the maximum character length that fits within maxBytes
+  let end = text.length;
+  while (end > 0 && getUtf8ByteLength(text.slice(0, end)) > maxBytes) {
+    end--;
+  }
+
+  if (end === 0) {
+    return ""; // Cannot fit even one character
+  }
+
+  // Try to find a good boundary
+  const boundary = findBestBoundary(text, end);
+  if (boundary > 0) {
+    end = boundary;
+  }
+
+  return text.slice(0, end).trim();
+}
+
+/**
  * Find the best boundary position for splitting text.
  * Prioritizes: paragraphs > horizontal rules > sentences > spaces.
  *
