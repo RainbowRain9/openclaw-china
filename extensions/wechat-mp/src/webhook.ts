@@ -16,6 +16,12 @@ import type { PluginConfig, ResolvedWechatMpAccount, WebhookTarget, WechatMpInbo
 
 const WEBHOOK_TARGETS = new Map<string, WebhookTarget[]>();
 
+/**
+ * WeChat requires response within 5 seconds. We use 4.5s to leave buffer.
+ * @see https://developers.weixin.qq.com/doc/offiaccount/Message_Management/Receiving_messages_when_server_interacts_with_official_account.html
+ */
+const WECHAT_PASSIVE_TIMEOUT_MS = 4500;
+
 function normalizeWebhookPath(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "/";
@@ -172,6 +178,22 @@ async function handoffInboundCandidate(
   const logger = createLogger(target);
 
   await recordCandidateState(target.account, candidate);
+
+  // Send welcome text on subscribe event
+  if (candidate.event === "subscribe") {
+    const welcomeText = target.account.config.welcomeText?.trim();
+    if (welcomeText && target.account.canSendActive) {
+      logger.info(`sending welcome text to ${candidate.openId}`);
+      const welcomeResult = await sendWechatMpActiveText({
+        account: target.account,
+        toUserName: candidate.openId,
+        text: welcomeText,
+      });
+      if (!welcomeResult.ok) {
+        logger.error(`welcome text send failed: ${welcomeResult.error ?? "unknown error"}`);
+      }
+    }
+  }
 
   if (!runtime) {
     logger.warn(`runtime unavailable, skip candidate ${candidate.dedupeKey}`);
@@ -423,14 +445,66 @@ export async function handleWechatMpWebhookRequest(
     return true;
   }
 
-  const handoff = await handoffInboundCandidate(target, candidate);
-  if (handoff.passiveReplyBody) {
+  const replyMode = resolveReplyMode(target.account);
+  const logger = createLogger(target);
+
+  // Create timeout promise for passive mode
+  const timeoutPromise = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), WECHAT_PASSIVE_TIMEOUT_MS);
+  });
+
+  const handoffPromise = handoffInboundCandidate(target, candidate);
+
+  // For passive mode, race against timeout to ensure 5s response
+  if (replyMode === "passive") {
+    const handoff = await Promise.race([handoffPromise, timeoutPromise]);
+
+    if (handoff === null) {
+      // Timeout - return success immediately, continue processing in background
+      logger.warn(`passive reply timeout after ${WECHAT_PASSIVE_TIMEOUT_MS}ms, returning success and continuing in background`);
+      await updateAccountState(target.account.accountId, { lastError: "passive reply timeout" });
+
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end("success");
+
+      // Continue processing in background, fallback to active send if possible
+      handoffPromise.then(async (result) => {
+        if (result.passiveReplyBody && target.account.canSendActive) {
+          // Extract the text content from passive reply XML
+          const textMatch = result.passiveReplyBody.match(/<Content><!\[CDATA\[(.*?)\]\]><\/Content>/s);
+          const text = textMatch?.[1];
+          if (text) {
+            logger.info(`sending delayed reply via active message to ${candidate.openId}`);
+            await sendWechatMpActiveText({
+              account: target.account,
+              toUserName: candidate.openId,
+              text,
+            });
+          }
+        }
+      }).catch((err) => {
+        logger.error(`background handoff failed: ${err instanceof Error ? err.message : String(err)}`);
+      });
+
+      return true;
+    }
+
+    if (handoff.passiveReplyBody) {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.end(handoff.passiveReplyBody);
+      return true;
+    }
+
     res.statusCode = 200;
-    res.setHeader("Content-Type", "application/xml; charset=utf-8");
-    res.end(handoff.passiveReplyBody);
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("success");
     return true;
   }
 
+  // For active mode, no strict timeout needed - WeChat just needs "success" acknowledgment
+  await handoffPromise;
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.end("success");

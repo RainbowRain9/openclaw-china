@@ -9,6 +9,7 @@ import {
   WECHAT_TEXT_BYTE_LIMIT,
   getUtf8ByteLength,
   splitTextByByteLimit,
+  truncateTextByByteLimit,
 } from "./text.js";
 import type {
   ResolvedWechatMpAccount,
@@ -46,9 +47,16 @@ export function buildPassiveTextReply(params: {
   timestamp?: string;
   nonce?: string;
 }): PassiveReplyResult {
-  const content = params.content.trim();
+  let content = params.content.trim();
   if (!content) {
     return { ok: false, error: "empty passive reply content" };
+  }
+
+  // Truncate if exceeds WeChat's byte limit for passive reply
+  const byteLength = getUtf8ByteLength(content);
+  if (byteLength > WECHAT_TEXT_BYTE_LIMIT) {
+    const truncated = truncateTextByByteLimit(content, WECHAT_TEXT_BYTE_LIMIT - 20); // Reserve space for suffix
+    content = truncated + "…[消息过长已截断]";
   }
 
   const createTime = Number(params.timestamp ?? Math.floor(Date.now() / 1000));
