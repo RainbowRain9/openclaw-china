@@ -46,6 +46,7 @@ import {
   type QQBotAccountConfig,
   type PluginConfig,
 } from "./config.js";
+import { validateRemoteUrl } from "./utils/ssrf-guard.js";
 import {
   isQQBotHttpImageUrl,
   normalizeQQBotMarkdownImages,
@@ -819,7 +820,7 @@ function buildVoiceASRFallbackReply(errorMessage?: string): string {
   return `${VOICE_ASR_FALLBACK_TEXT}\n\n接口错误：${trimTextForReply(detail, VOICE_ASR_ERROR_MAX_LENGTH)}`;
 }
 
-async function resolveInboundAttachmentsForAgent(params: {
+export async function resolveInboundAttachmentsForAgent(params: {
   attachments?: QQInboundAttachment[];
   qqCfg: QQBotAccountConfig;
   logger: Logger;
@@ -851,6 +852,7 @@ async function resolveInboundAttachmentsForAgent(params: {
     const next: ResolvedInboundAttachment = { attachment: att };
     if (isImageAttachment(att) && isHttpUrl(att.url)) {
       try {
+        await validateRemoteUrl(att.url);
         const downloaded = await downloadToTempFile(att.url, {
           timeout,
           maxSize,
@@ -883,6 +885,7 @@ async function resolveInboundAttachmentsForAgent(params: {
         logger.warn("voice ASR skipped: attachment URL is not an HTTP URL");
       } else {
         try {
+          await validateRemoteUrl(att.url);
           const media = await fetchMediaFromUrl(att.url, {
             timeout,
             maxSize,

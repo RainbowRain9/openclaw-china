@@ -778,10 +778,11 @@ deliver 管线在 `outbound-deliver.ts`（`parseAndSendMediaTags:65` + `sendPlai
 
 #### 分阶段（与 prior 建议 P0→P2 一致，已按代码核实）
 
-**P0(a) — SSRF 防护（入站，最低风险安全修复）**
+**P0(a) — SSRF 防护（入站，最低风险安全修复）**  ✅ 已落地（2026-06-13）
 - 新建 `extensions/qqbot/src/utils/ssrf-guard.ts`：移植 `isReservedAddr`/`validateRemoteUrl`（上游 `ssrf-guard.ts:31,61`）。DNS 用 `node:dns/promises`。
 - 但**不**在 fork 出站 URL 透传处加 SSRF——出站是 QQ 服务端抓取，加 SSRF 会改变行为（拦截 QQ 本会抓取的 URL）。仅在入站下载路径加。
 - 入站：在 `bot.ts:854` `downloadToTempFile` 之前、`:886` `fetchMediaFromUrl` 之前调用 `validateRemoteUrl(att.url)`，失败则 warn 并跳过该附件（保留 fork 的 try/catch 降级）。**注意**：上游把 SSRF 做进 `downloadFile` 内部；fork 应尊重 shared 包边界，做在 fork 调用点而非改 shared（shared 供多 channel 共用，强行改 shared 会影响其它 channel）。
+- **落地实况**：`ssrf-guard.ts` 逐字移植上游；`bot.ts` 在 image/voice 两个入站下载 try 块首行调 `validateRemoteUrl(att.url)`（抛错由既有 catch warn + 跳过），并 `export` 了 `resolveInboundAttachmentsForAgent` 供测试。出站 `send.ts` 未改（QQ 自抓取）。测试：`utils/ssrf-guard.test.ts`（10 用例，含 172.16 边界、DNS rebinding mock、DNS 失败非致命）+ `bot.inbound-ssrf.test.ts`（3 用例，部分 mock shared 下载函数，验证内网 IP URL 不触发下载）。套件 207/207、tsc、tsup 均绿。
 
 **P0(b) — 分片大文件上传（headline 能力）**
 - 新建 `extensions/qqbot/src/utils/chunked-upload.ts`：移植 `chunkedUploadC2C`/`chunkedUploadGroup`/`computeFileHashes`/`readFileChunk`/`putToPresignedUrl`/`runWithConcurrency` + `UploadDailyLimitExceededError` + `ChunkedUploadProgress`（上游 `chunked-upload.ts` 全文）。**改动点**：上游从 `../api.js` 拿 `getAccessToken`/`c2cUploadPrepare` 等；fork 改为从 `../client.js` 拿（见下）。
@@ -1645,7 +1646,7 @@ China-fork 在本子系统必须原样保留、不得被移植覆盖的特性：
 | ID | 子系统 | 内容 | 工作量 | 风险 | 依赖 |
 |---|---|---|---|---|---|
 | P0-A | config-types-manifest (4.1) | **config key 决策 + 读侧兼容层**（保留 `qqbot-china` 权威 + 读侧兼容 `channels.qqbot`）；manifest 纯加法（`capabilities`/具名 skills/`extensions` 占位）；Zod + 三处 JSON Schema 增量字段（见 4.1 差距 1-12）；建议抽取 `buildAccountJsonSchema()` 消除三份手抄漂移 | 小-中 | 中（config key 关键路径）/ 低（manifest） | 无（Phase 1 底座） |
-| P0-B | media-largefile (4.5) | **SSRF 守卫（仅入站）**：移植 `ssrf-guard.ts`，在 `bot.ts:854/:886` 下载前调 `validateRemoteUrl` | 小（0.5d） | 低 | 无 |
+| P0-B | media-largefile (4.5) | **✅ 已落地（2026-06-13）SSRF 守卫（仅入站）**：移植 `ssrf-guard.ts`，在 `bot.ts:854/:886` 下载前调 `validateRemoteUrl` | 小（0.5d） | 低 | 无 |
 | P0-C | media-largefile (4.5) | **chunked 大文件上传 + upload-cache + 错误码映射**：成组 port（API 客户端 + 类型 + file-utils），re-point 时保留 ref-index/ASR/streaming 集成点 | 大（1.5-2d） | 中 | 无 |
 | P0-D | group-finetuning (4.7) | **per-group 精细控制全栈**：`groups` map + 4 层链 + group-history LRU + 三层 gate + SDK adapter；**前置**扩展 `parseGroupMessage` 捕获 `mentions[]`/`refMsgIdx`/`message_type`；remap fork flat `requireMention`→`defaultRequireMention`；扩展 gate 保留 `groupPolicy` allowlist/disabled | 大（3-5d） | 高 | P0-A（config/types） |
 | P0-E | transport-connection (4.2) | session-store 持久化 + 跨重启 RESUME + close-code 感知重连 + `MAX_RECONNECT_ATTEMPTS=100` + User-Agent 头 + uncaughtException 守卫 | 中 | 低 | 无 |
