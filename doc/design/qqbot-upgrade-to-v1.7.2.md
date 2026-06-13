@@ -1649,7 +1649,7 @@ China-fork 在本子系统必须原样保留、不得被移植覆盖的特性：
 | P0-B | media-largefile (4.5) | **✅ 已落地（2026-06-13）SSRF 守卫（仅入站）**：移植 `ssrf-guard.ts`，在 `bot.ts:854/:886` 下载前调 `validateRemoteUrl` | 小（0.5d） | 低 | 无 |
 | P0-C | media-largefile (4.5) | **chunked 大文件上传 + upload-cache + 错误码映射**：成组 port（API 客户端 + 类型 + file-utils），re-point 时保留 ref-index/ASR/streaming 集成点 | 大（1.5-2d） | 中 | 无 |
 | P0-D | group-finetuning (4.7) | **per-group 精细控制全栈**：`groups` map + 4 层链 + group-history LRU + 三层 gate + SDK adapter；**前置**扩展 `parseGroupMessage` 捕获 `mentions[]`/`refMsgIdx`/`message_type`；remap fork flat `requireMention`→`defaultRequireMention`；扩展 gate 保留 `groupPolicy` allowlist/disabled | 大（3-5d） | 高 | P0-A（config/types） |
-| P0-E | transport-connection (4.2) | session-store 持久化 + 跨重启 RESUME + close-code 感知重连 + `MAX_RECONNECT_ATTEMPTS=100` + User-Agent 头 + uncaughtException 守卫 | 中 | 低 | 无 |
+| P0-E | transport-connection (4.2) | **✅ 已落地（2026-06-13）** session-store 持久化 + 跨重启 RESUME + close-code 感知重连 + `MAX_RECONNECT_ATTEMPTS=100` + User-Agent 头 + uncaughtException 守卫 | 中 | 低 | 无 |
 
 > **勘误修正**：config-types-manifest 的 capabilities 差异不是「fork 缺 capabilities」，而是 fork 的 capabilities 在 `ChannelPlugin` 对象上（channel.ts:71-81，chatTypes 含 `channel`，blockStreaming=false），上游 manifest 的 `capabilities:{proactiveMessaging,cronJobs}`（openclaw.plugin.json:8-11）是 fork manifest **完全缺失**的独立字段。P0-A 应 port 后者，保留前者。
 

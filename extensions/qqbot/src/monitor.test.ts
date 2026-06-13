@@ -7,11 +7,14 @@ const mocks = vi.hoisted(() => ({
     static instances: InstanceType<typeof MockWebSocket>[] = [];
 
     readonly url: string;
+    readonly options: { headers?: Record<string, string> } | undefined;
+    readonly sent: Array<Record<string, unknown>> = [];
     readyState = MockWebSocket.OPEN;
     private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
 
-    constructor(url: string) {
+    constructor(url: string, options?: { headers?: Record<string, string> }) {
       this.url = url;
+      this.options = options;
       MockWebSocket.instances.push(this);
     }
 
@@ -22,8 +25,12 @@ const mocks = vi.hoisted(() => ({
       return this;
     }
 
-    send(): void {
-      // no-op for monitor tests
+    send(payload: string): void {
+      try {
+        this.sent.push(JSON.parse(payload) as Record<string, unknown>);
+      } catch {
+        this.sent.push({ raw: payload });
+      }
     }
 
     emitMessage(payload: unknown): void {
@@ -54,7 +61,11 @@ const mocks = vi.hoisted(() => ({
   clearTokenCache: vi.fn(),
   getAccessToken: vi.fn(),
   getGatewayUrl: vi.fn(),
+  getPluginUserAgent: vi.fn().mockReturnValue("QQBotPlugin/test (Node/test; test)"),
   handleQQBotDispatch: vi.fn(),
+  loadSession: vi.fn().mockReturnValue(null),
+  saveSession: vi.fn(),
+  clearSession: vi.fn(),
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -71,6 +82,13 @@ vi.mock("./client.js", () => ({
   clearTokenCache: mocks.clearTokenCache,
   getAccessToken: mocks.getAccessToken,
   getGatewayUrl: mocks.getGatewayUrl,
+  getPluginUserAgent: mocks.getPluginUserAgent,
+}));
+
+vi.mock("./session-store.js", () => ({
+  loadSession: mocks.loadSession,
+  saveSession: mocks.saveSession,
+  clearSession: mocks.clearSession,
 }));
 
 vi.mock("./bot.js", () => ({
@@ -222,6 +240,144 @@ describe("QQBot monitor", () => {
     expect(getActiveAccountIds()).toEqual([]);
     expect(isQQBotMonitorActiveForAccount("broken")).toBe(false);
     expect(mocks.MockWebSocket.instances).toHaveLength(0);
+  });
+
+  // ── P0-E: hardened WS lifecycle (session RESUME, close-code, UA, guard) ──
+
+  it("attaches a User-Agent header to the WebSocket handshake", async () => {
+    monitorQQBotProvider({ config: baseConfig, accountId: "ua-test" });
+    await flushMicrotasks();
+
+    const socket = mocks.MockWebSocket.instances[0];
+    expect(socket?.options?.headers?.["User-Agent"]).toBe("QQBotPlugin/test (Node/test; test)");
+    expect(mocks.getPluginUserAgent).toHaveBeenCalled();
+  });
+
+  it("persists the session on READY (enables cross-restart RESUME)", async () => {
+    monitorQQBotProvider({ config: baseConfig, accountId: "ready-test" });
+    await flushMicrotasks();
+    const socket = mocks.MockWebSocket.instances[0];
+
+    socket?.emitMessage({ op: 10, d: { heartbeat_interval: 30000 } });
+    await flushMicrotasks();
+    socket?.emitMessage({ op: 0, t: "READY", d: { session_id: "sess-ready" }, s: 1 });
+    await flushMicrotasks();
+
+    expect(mocks.saveSession).toHaveBeenCalledWith(
+      expect.objectContaining({ accountId: "ready-test", sessionId: "sess-ready", appId: "app-1" }),
+    );
+  });
+
+  it("sends op:6 RESUME on Hello when a session was restored", async () => {
+    mocks.loadSession.mockReturnValueOnce({
+      sessionId: "sess-saved",
+      lastSeq: 5,
+      lastConnectedAt: 0,
+      intentLevelIndex: 0,
+      accountId: "resume-test",
+      savedAt: Date.now(),
+      appId: "app-1",
+    });
+
+    monitorQQBotProvider({ config: baseConfig, accountId: "resume-test" });
+    await flushMicrotasks();
+    const socket = mocks.MockWebSocket.instances[0];
+
+    socket?.emitMessage({ op: 10, d: { heartbeat_interval: 30000 } });
+    await flushMicrotasks();
+
+    const ops = socket?.sent.map((p) => p.op) ?? [];
+    expect(ops).toContain(6); // RESUME
+    expect(ops).not.toContain(2); // not IDENTIFY
+  });
+
+  it("sends op:2 IDENTIFY on Hello when no session was restored", async () => {
+    monitorQQBotProvider({ config: baseConfig, accountId: "identify-test" });
+    await flushMicrotasks();
+    const socket = mocks.MockWebSocket.instances[0];
+
+    socket?.emitMessage({ op: 10, d: { heartbeat_interval: 30000 } });
+    await flushMicrotasks();
+
+    const ops = socket?.sent.map((p) => p.op) ?? [];
+    expect(ops).toContain(2); // IDENTIFY
+  });
+
+  it("halts and does not reconnect on close 4914 (bot offline)", async () => {
+    const running = monitorQQBotProvider({ config: baseConfig, accountId: "halt-test" });
+    await flushMicrotasks();
+    const socket = mocks.MockWebSocket.instances[0];
+
+    socket?.emitClose(4914, "offline");
+    await running;
+
+    expect(mocks.MockWebSocket.instances).toHaveLength(1);
+    expect(isQQBotMonitorActiveForAccount("halt-test")).toBe(false);
+  });
+
+  it("clears the persisted session and flags token refresh on close 4006", async () => {
+    monitorQQBotProvider({ config: baseConfig, accountId: "c4006" });
+    await flushMicrotasks();
+    mocks.clearSession.mockClear();
+
+    mocks.MockWebSocket.instances[0]?.emitClose(4006, "session invalid");
+    await flushMicrotasks();
+
+    expect(mocks.clearSession).toHaveBeenCalledWith("c4006");
+  });
+
+  it("waits ~60s before reconnecting on close 4008 (rate limited)", async () => {
+    vi.useFakeTimers();
+    try {
+      monitorQQBotProvider({ config: baseConfig, accountId: "c4008" });
+      await flushMicrotasks();
+      expect(mocks.getAccessToken).toHaveBeenCalledTimes(1);
+
+      mocks.MockWebSocket.instances[0]?.emitClose(4008, "rate limited");
+
+      await vi.advanceTimersByTimeAsync(59000);
+      expect(mocks.MockWebSocket.instances).toHaveLength(1); // not yet reconnected
+
+      await vi.advanceTimersByTimeAsync(2000); // total > 60s
+      await flushMicrotasks();
+      expect(mocks.MockWebSocket.instances).toHaveLength(2); // reconnected
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the session on op:9 Invalid Session when canResume is false", async () => {
+    monitorQQBotProvider({ config: baseConfig, accountId: "op9" });
+    await flushMicrotasks();
+    mocks.clearSession.mockClear();
+
+    mocks.MockWebSocket.instances[0]?.emitMessage({ op: 9, d: false });
+    await flushMicrotasks();
+
+    expect(mocks.clearSession).toHaveBeenCalledWith("op9");
+  });
+
+  it("does not clear the session on op:9 when canResume is true", async () => {
+    monitorQQBotProvider({ config: baseConfig, accountId: "op9resume" });
+    await flushMicrotasks();
+    mocks.clearSession.mockClear();
+
+    mocks.MockWebSocket.instances[0]?.emitMessage({ op: 9, d: true });
+    await flushMicrotasks();
+
+    expect(mocks.clearSession).not.toHaveBeenCalled();
+  });
+
+  it("installs and removes a process uncaughtException guard per account", async () => {
+    const before = process.listenerCount("uncaughtException");
+
+    const running = monitorQQBotProvider({ config: baseConfig, accountId: "guard-test" });
+    await flushMicrotasks();
+    expect(process.listenerCount("uncaughtException")).toBe(before + 1);
+
+    stopQQBotMonitorForAccount("guard-test");
+    await running;
+    expect(process.listenerCount("uncaughtException")).toBe(before);
   });
 });
 

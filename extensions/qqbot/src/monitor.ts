@@ -11,7 +11,8 @@ import {
   DEFAULT_ACCOUNT_ID,
   type PluginConfig,
 } from "./config.js";
-import { clearTokenCache, getAccessToken, getGatewayUrl } from "./client.js";
+import { clearTokenCache, getAccessToken, getGatewayUrl, getPluginUserAgent } from "./client.js";
+import { clearSession, loadSession, saveSession } from "./session-store.js";
 
 export interface MonitorQQBotOpts {
   config?: PluginConfig;
@@ -41,7 +42,16 @@ const INTENTS = {
 const DEFAULT_INTENTS =
   INTENTS.GUILD_MESSAGES | INTENTS.DIRECT_MESSAGE | INTENTS.GROUP_AND_C2C;
 
-const RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000, 20000, 30000];
+const RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10000, 30000, 60000];
+// 频率限制 / 快速断开后的等待时间
+const RATE_LIMIT_DELAY_MS = 60000;
+// op:9 Invalid Session 后的固定重连间隔
+const INVALID_SESSION_RECONNECT_DELAY_MS = 3000;
+// 重连上限（避免无限重试）
+const MAX_RECONNECT_ATTEMPTS = 100;
+// 快速断开检测：连接后很快断开视为异常，连续达阈值则退避
+const MAX_QUICK_DISCONNECT_COUNT = 3;
+const QUICK_DISCONNECT_THRESHOLD_MS = 5000;
 
 function formatGatewayConnectError(err: unknown): string {
   if (err instanceof HttpError) {
@@ -67,6 +77,12 @@ interface ActiveConnection {
   reconnectTimer: ReturnType<typeof setTimeout> | null;
   reconnectAttempt: number;
   connecting: boolean;
+  /** 上次连接成功（socket open）的时间戳，用于快速断开检测 */
+  lastConnectAt: number;
+  /** 连续快速断开次数 */
+  quickDisconnectCount: number;
+  /** 下次 connect 前是否需要刷新 token（close 4004 / op:9 invalid session） */
+  shouldRefreshToken: boolean;
 }
 
 function isConnectionIdle(conn: ActiveConnection | undefined): boolean {
@@ -93,6 +109,9 @@ function getOrCreateConnection(accountId: string): ActiveConnection {
       reconnectTimer: null,
       reconnectAttempt: 0,
       connecting: false,
+      lastConnectAt: 0,
+      quickDisconnectCount: 0,
+      shouldRefreshToken: false,
     };
     activeConnections.set(accountId, conn);
   }
@@ -173,10 +192,22 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
   nextConn.promise = new Promise<void>((resolve, reject) => {
     let stopped = false;
 
+    // 安全网：捕获 WS 握手异步错误（如 403 Unexpected server response），
+    // 防止进程崩溃。仅吞掉 WS 握手类错误，其它重新抛出交上层处理。
+    // 多账户并发下每个账户装一个 handler，finish 时严格移除，避免泄漏。
+    const uncaughtHandler = (err: Error) => {
+      if (err.message?.includes("Unexpected server response")) {
+        logger.error(`caught WS handshake error (non-fatal): ${err.message}`);
+        return;
+      }
+      throw err;
+    };
+
     const finish = (err?: unknown) => {
       if (stopped) return;
       stopped = true;
       abortSignal?.removeEventListener("abort", onAbort);
+      process.off("uncaughtException", uncaughtHandler);
       cleanupSocket(nextConn);
       nextConn.connecting = false;
       nextConn.sessionId = null;
@@ -184,6 +215,9 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
       nextConn.promise = null;
       nextConn.stop = null;
       nextConn.reconnectAttempt = 0;
+      nextConn.lastConnectAt = 0;
+      nextConn.quickDisconnectCount = 0;
+      nextConn.shouldRefreshToken = false;
       activeConnections.delete(accountId);
       if (err) {
         reject(err);
@@ -202,13 +236,23 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
       finish();
     };
 
-    const scheduleReconnect = (reason: string) => {
+    const scheduleReconnect = (reason: string, customDelayMs?: number) => {
       if (stopped) return;
-      if (nextConn.reconnectTimer) return;
+      if (nextConn.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+        logger.error(`max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached; giving up`);
+        finish(new Error(`QQBot gateway exceeded max reconnect attempts for account ${accountId}`));
+        return;
+      }
+      // 取消已挂起的重连定时器，允许用新的延迟重新调度
+      if (nextConn.reconnectTimer) {
+        clearTimeout(nextConn.reconnectTimer);
+        nextConn.reconnectTimer = null;
+      }
       const delay =
+        customDelayMs ??
         RECONNECT_DELAYS_MS[Math.min(nextConn.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)];
       nextConn.reconnectAttempt += 1;
-      logger.warn(`[reconnect] ${reason}; retry in ${delay}ms`);
+      logger.warn(`[reconnect] ${reason}; retry in ${delay}ms (attempt ${nextConn.reconnectAttempt})`);
       nextConn.reconnectTimer = setTimeout(() => {
         nextConn.reconnectTimer = null;
         void connect();
@@ -252,12 +296,30 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
       nextConn.socket.send(JSON.stringify(payload));
     };
 
+    /** 持久化当前 session 状态（带节流写），用于跨进程重启 RESUME。 */
+    const persistSession = () => {
+      if (!nextConn.sessionId) return;
+      saveSession({
+        sessionId: nextConn.sessionId,
+        lastSeq: nextConn.lastSeq,
+        lastConnectedAt: nextConn.lastConnectAt,
+        intentLevelIndex: 0,
+        accountId,
+        savedAt: Date.now(),
+        appId: qqCfg.appId as string,
+      });
+    };
+
     const handleGatewayPayload = async (payload: GatewayPayload, activeSocket: WebSocket) => {
       if (stopped || nextConn.socket !== activeSocket) {
         return;
       }
       if (typeof payload.s === "number") {
         nextConn.lastSeq = payload.s;
+        // 每条带 s 的事件更新持久化的 lastSeq（节流写），支持跨重启 RESUME
+        if (nextConn.sessionId) {
+          persistSession();
+        }
       }
 
       switch (payload.op) {
@@ -287,15 +349,21 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
           }
           scheduleReconnect("server requested reconnect");
           return;
-        case 9:
-          nextConn.sessionId = null;
-          nextConn.lastSeq = null;
-          clearTokenCache(qqCfg.appId as string);
+        case 9: {
+          // op:9 Invalid Session：读取 d.canResume，仅不可恢复时清 session
+          const canResume = payload.d as boolean | undefined;
+          if (!canResume) {
+            nextConn.sessionId = null;
+            nextConn.lastSeq = null;
+            clearSession(accountId);
+            nextConn.shouldRefreshToken = true;
+          }
           if (!cleanupSocket(nextConn, activeSocket)) {
             return;
           }
-          scheduleReconnect("invalid session");
+          scheduleReconnect("invalid session", INVALID_SESSION_RECONNECT_DELAY_MS);
           return;
+        }
         case 0: {
           const eventType = payload.t ?? "";
           if (eventType === "READY") {
@@ -304,6 +372,7 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
               nextConn.sessionId = ready.session_id;
             }
             nextConn.reconnectAttempt = 0;
+            persistSession();
             logger.info("gateway ready");
             return;
           }
@@ -335,13 +404,27 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
 
       try {
         cleanupSocket(nextConn);
+
+        // 恢复持久化的 session（5 分钟窗口内、appId 匹配），实现跨进程重启 RESUME
+        const saved = loadSession(accountId, qqCfg.appId as string);
+        if (saved?.sessionId) {
+          nextConn.sessionId = saved.sessionId;
+          nextConn.lastSeq = saved.lastSeq;
+          logger.info(`restored session: sessionId=${saved.sessionId}, lastSeq=${saved.lastSeq}`);
+        }
+        // 上次因 4004 / op:9 标记需刷新 token，下次连接前清缓存
+        if (nextConn.shouldRefreshToken) {
+          clearTokenCache(qqCfg.appId as string);
+          nextConn.shouldRefreshToken = false;
+        }
+
         const token = await getAccessToken(qqCfg.appId as string, qqCfg.clientSecret as string);
         if (stopped) return;
         const gatewayUrl = await getGatewayUrl(token);
         if (stopped) return;
         logger.info(`connecting gateway: ${gatewayUrl}`);
 
-        const ws = new WebSocket(gatewayUrl);
+        const ws = new WebSocket(gatewayUrl, { headers: { "User-Agent": getPluginUserAgent() } });
         nextConn.socket = ws;
         if (stopped) {
           cleanupSocket(nextConn, ws);
@@ -349,6 +432,7 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
         }
 
         ws.on("open", () => {
+          nextConn.lastConnectAt = Date.now();
           logger.info("gateway socket opened");
         });
 
@@ -370,8 +454,66 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
           if (!cleanupSocket(nextConn, ws)) {
             return;
           }
+          const codeNum = typeof code === "number" ? code : 1000;
           logger.warn(`gateway socket closed (${code}) ${String(reason)}`);
-          scheduleReconnect("socket closed");
+
+          // close-code 感知重连（见 QQ 官方文档）
+          // 4914/4915: 机器人下架/封禁 —— 不重连
+          if (codeNum === 4914 || codeNum === 4915) {
+            logger.error(
+              `bot is ${codeNum === 4914 ? "offline/sandbox-only" : "banned"} (code ${codeNum}); halting reconnect`,
+            );
+            finish();
+            return;
+          }
+          // 4004: token 无效 —— 标记刷新后重连
+          if (codeNum === 4004) {
+            nextConn.shouldRefreshToken = true;
+            scheduleReconnect("invalid token (4004)");
+            return;
+          }
+          // 4008: 限流 —— 等待 60s 后重连
+          if (codeNum === 4008) {
+            scheduleReconnect("rate limited (4008)", RATE_LIMIT_DELAY_MS);
+            return;
+          }
+          // 4006/4007/4009: 会话失效/seq 无效/超时 —— 清 session 重新 identify
+          if (codeNum === 4006 || codeNum === 4007 || codeNum === 4009) {
+            nextConn.sessionId = null;
+            nextConn.lastSeq = null;
+            clearSession(accountId);
+            nextConn.shouldRefreshToken = true;
+          } else if (codeNum >= 4900 && codeNum <= 4913) {
+            // 4900-4913: 内部错误 —— 清 session 重新 identify
+            nextConn.sessionId = null;
+            nextConn.lastSeq = null;
+            clearSession(accountId);
+            nextConn.shouldRefreshToken = true;
+          }
+
+          // 快速断开检测：连接后 <5s 即断开，连续达阈值则退避
+          const connectionDuration = nextConn.lastConnectAt
+            ? Date.now() - nextConn.lastConnectAt
+            : Number.POSITIVE_INFINITY;
+          if (connectionDuration < QUICK_DISCONNECT_THRESHOLD_MS) {
+            nextConn.quickDisconnectCount += 1;
+            if (nextConn.quickDisconnectCount >= MAX_QUICK_DISCONNECT_COUNT) {
+              logger.error(
+                `too many quick disconnects (${nextConn.quickDisconnectCount}); possible permission/appId/secret issue`,
+              );
+              nextConn.quickDisconnectCount = 0;
+              if (codeNum !== 1000) {
+                scheduleReconnect("quick-disconnect backoff", RATE_LIMIT_DELAY_MS);
+              }
+              return;
+            }
+          } else {
+            nextConn.quickDisconnectCount = 0;
+          }
+
+          if (codeNum !== 1000) {
+            scheduleReconnect(`socket closed (${codeNum})`);
+          }
         });
 
         ws.on("error", (err) => {
@@ -395,6 +537,7 @@ export async function monitorQQBotProvider(opts: MonitorQQBotOpts = {}): Promise
     }
 
     abortSignal?.addEventListener("abort", onAbort, { once: true });
+    process.on("uncaughtException", uncaughtHandler);
     void connect();
   });
 

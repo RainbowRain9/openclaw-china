@@ -25,6 +25,7 @@ import {
   allocateMsgSeq,
   clearTokenCache,
   getAccessToken,
+  getPluginUserAgent,
   sendC2CInputNotify,
   sendC2CMessage,
   sendC2CStreamMessage,
@@ -35,6 +36,19 @@ import {
   uploadC2CMedia,
   uploadGroupMedia,
 } from "./client.js";
+
+describe("getPluginUserAgent", () => {
+  it("embeds the plugin name, node version, and platform", () => {
+    const ua = getPluginUserAgent();
+    expect(ua.startsWith("QQBotPlugin/")).toBe(true);
+    expect(ua).toContain(`Node/${process.versions.node}`);
+    expect(ua).toContain(process.platform);
+  });
+
+  it("resolves a real package version (not the unknown fallback)", () => {
+    expect(getPluginUserAgent()).not.toContain("QQBotPlugin/unknown");
+  });
+});
 
 describe("getAccessToken", () => {
   beforeEach(() => {

@@ -1,9 +1,25 @@
 import { HttpError, httpGet, httpPost, type HttpRequestOptions } from "@openclaw-china/shared";
+import os from "node:os";
+import { getPackageVersion } from "./utils/pkg-version.js";
 
 const API_BASE = "https://api.sgroup.qq.com";
 const TOKEN_URL = "https://bots.qq.com/app/getAppAccessToken";
 const MSG_SEQ_BASE = 1000000;
 const MAX_DUPLICATE_MSG_SEQ_RETRIES = 5;
+
+// ============ Plugin User-Agent ============
+// 发送在 WebSocket 握手与 HTTP 请求中，便于 QQ 平台侧识别本插件。
+// 格式: QQBotPlugin/{version} (Node/{nodeVersion}; {platform})
+// 移植自上游 api.ts:getPluginUserAgent，去掉依赖未落地的 userAgentSuffix
+// 配置字段（属 P0-A 后续），保留核心标识。
+const _pluginVersion = getPackageVersion(import.meta.url);
+
+/**
+ * 构造插件 User-Agent 字符串。
+ */
+export function getPluginUserAgent(): string {
+  return `QQBotPlugin/${_pluginVersion} (Node/${process.versions.node}; ${os.platform()})`;
+}
 
 type TokenCache = {
   token: string;
