@@ -3,9 +3,12 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DEFAULT_ACCOUNT_ID, QQBOT_CHANNEL_ID, type PluginConfig } from "./config.js";
 import { qqbotOutbound } from "./outbound.js";
+import { qqbotDataDirPath } from "./platform.js";
 import type { QQBotSendResult, QQChatType } from "./types.js";
 
-const DEFAULT_KNOWN_TARGETS_PATH = join(homedir(), ".openclaw", "qqbot", "data", "known-targets.json");
+const DEFAULT_KNOWN_TARGETS_PATH = join(qqbotDataDirPath("data"), "known-targets.json");
+// Legacy layout (~/.openclaw/data/qqbot) — intentionally different base, kept
+// for one-time migration lookup only.
 const LEGACY_KNOWN_TARGETS_PATH = join(homedir(), ".openclaw", "data", "qqbot", "known-targets.json");
 
 type KnownQQBotTargetKind = "user" | "group" | "channel";

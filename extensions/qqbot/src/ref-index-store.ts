@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { qqbotDataDirPath } from "./platform.js";
 
 export interface RefAttachmentSummary {
   type: "image" | "voice" | "video" | "file" | "unknown";
@@ -31,7 +31,7 @@ type RefIndexLine = {
   t: number;
 };
 
-const REF_INDEX_FILE = join(homedir(), ".openclaw", "qqbot", "data", "ref-index.jsonl");
+const REF_INDEX_FILE = join(qqbotDataDirPath("data"), "ref-index.jsonl");
 const MAX_CONTENT_LENGTH = 500;
 const MAX_ENTRIES = 50000;
 const TTL_MS = 7 * 24 * 60 * 60 * 1000;
