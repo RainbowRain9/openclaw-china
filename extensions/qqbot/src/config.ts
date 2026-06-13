@@ -3,9 +3,27 @@ import { join } from "node:path";
 import { z } from "zod";
 
 export const QQBOT_CHANNEL_ID = "qqbot" as const;
+
+/**
+ * Authoritative config storage key. The China fork reads/writes its config
+ * under `channels["qqbot-china"]`. This MUST stay stable: every existing fork
+ * user's config lives here, and changing it would orphan all of it.
+ * (Design doc §7 R1 / C1 — confirmed single highest-risk item.)
+ */
 export const QQBOT_CONFIG_CHANNEL_ID = "qqbot-china" as const;
+
+/**
+ * Upstream `@tencent-connect/openclaw-qqbot` stores config under `channels.qqbot`.
+ * Read-side fallback ONLY: configs written under the upstream key (or migrated
+ * from upstream) still resolve, so we never touch the user's file. When both
+ * keys are present, `qqbot-china` wins (authoritative). Writes stay canonical
+ * to `qqbot-china` (see `withQQBotChannelConfig` / onboarding / china-setup).
+ */
+export const QQBOT_CONFIG_CHANNEL_ID_FALLBACK = "qqbot" as const;
+
 export const QQBOT_CONFIG_PREFIX = `channels.${QQBOT_CONFIG_CHANNEL_ID}` as const;
-export const QQBOT_CONFIG_PREFIXES = [QQBOT_CONFIG_PREFIX] as const;
+export const QQBOT_CONFIG_PREFIX_FALLBACK = `channels.${QQBOT_CONFIG_CHANNEL_ID_FALLBACK}` as const;
+export const QQBOT_CONFIG_PREFIXES = [QQBOT_CONFIG_PREFIX, QQBOT_CONFIG_PREFIX_FALLBACK] as const;
 
 function toTrimmedString(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
@@ -186,6 +204,8 @@ export function resolveInboundMediaTempDir(): string {
 export interface PluginConfig {
   channels?: Record<string, unknown> & {
     "qqbot-china"?: QQBotConfig;
+    /** Upstream key — read-side fallback only (see QQBOT_CONFIG_CHANNEL_ID_FALLBACK). */
+    "qqbot"?: QQBotConfig;
   };
 }
 
@@ -197,7 +217,12 @@ function asQQBotConfig(value: unknown): QQBotConfig | undefined {
 }
 
 export function resolveQQBotChannelConfig(cfg: PluginConfig | undefined): QQBotConfig | undefined {
-  return asQQBotConfig(cfg?.channels?.[QQBOT_CONFIG_CHANNEL_ID]);
+  const authoritative = asQQBotConfig(cfg?.channels?.[QQBOT_CONFIG_CHANNEL_ID]);
+  if (authoritative) return authoritative;
+  // Read-side compat: fall back to the upstream `channels.qqbot` key so configs
+  // written there (upstream users, migrations) are not orphaned. qqbot-china
+  // remains authoritative when both are present.
+  return asQQBotConfig(cfg?.channels?.[QQBOT_CONFIG_CHANNEL_ID_FALLBACK]);
 }
 
 export function withQQBotChannelConfig(

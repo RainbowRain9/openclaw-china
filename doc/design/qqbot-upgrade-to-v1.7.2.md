@@ -1925,10 +1925,12 @@ China-fork 在本子系统必须原样保留、不得被移植覆盖的特性：
 
 ### Phase 1 前置
 
-- [ ] **config key 决策已定**：保留 `qqbot-china` 权威 + 读侧兼容层（同时读 `qqbot`/`qqbot-china`），或一次性迁移脚本。文档化决策。
-- [ ] **`reload.configPrefixes` 与所读键匹配**：若读 `qqbot-china`，configPrefixes 必须含 `["channels.qqbot-china"]`（channel.ts:251），否则 hot-reload 断裂。
+- [x] **config key 决策已定**：保留 `qqbot-china` 权威 + 读侧兼容层（同时读 `qqbot`/`qqbot-china`），或一次性迁移脚本。文档化决策。
+  - **决策（2026-06-13 落地）**：采用 R1/C1 推荐的「双键间接层」(b) 方案，不 touch 用户文件。`channels["qqbot-china"]` 保持权威（写入路径 `withQQBotChannelConfig`/onboarding/china-setup 仅写此键）；新增 `channels.qqbot` 作为**只读回退**。实现：`config.ts` 新增 `QQBOT_CONFIG_CHANNEL_ID_FALLBACK="qqbot"`；`resolveQQBotChannelConfig` 先读 `qqbot-china`，缺失时回落 `qqbot`（两键并存时 `qqbot-china` 胜）。覆盖测试见 `config.test.ts`（5 用例：权威命中 / 回退命中 / 并存时权威胜 / 两键皆无 / 非 object 值忽略）。
+- [x] **`reload.configPrefixes` 与所读键匹配**：`QQBOT_CONFIG_PREFIXES` 已扩为 `["channels.qqbot-china","channels.qqbot"]`，`channel.ts:251` reload 同步覆盖两键，hot-reload 不断裂。`channel.test.ts` 断言已更新。
 - [ ] **fork-local `getDataDir()` 已建**：session-store 依赖 platform helper（`getQQBotDataDir`），fork 已在 ref-index-store.ts:34 内联相同约定——确认 re-inline 或加 helper。
-- [ ] **三处手抄 JSON Schema 同步机制已定**：抽取 `buildAccountJsonSchema()` 或从 Zod 生成，否则新增字段三处遗漏。
+- [x] **三处手抄 JSON Schema 同步机制已定**：抽取 `buildAccountJsonSchema()` 或从 Zod 生成，否则新增字段三处遗漏。
+  - **决策（2026-06-13 落地）**：采用「集中常量」方案（不引入 `zod-to-json-schema` 依赖，避免 schema shape 变更风险）。新增 `extensions/qqbot/src/config-schema.ts` 导出 `buildQQBotAccountJsonSchema()` + `buildQQBotConfigJsonSchema()`，字段集镜像 `QQBotAccountSchema`（Zod，权威）。`index.ts` 与 `channel.ts` 的内联手抄 schema 已替换为 builder 调用（两处 TS 源合一）。`openclaw.plugin.json` 为静态 JSON 无法 import，改为**逐字对齐 builder 输出**（补齐此前缺失的 `c2cMarkdownSafeChunkByteLimit`），并由 `config.test.ts` 新增 **parity 测试**（断言 manifest 顶层 + account 层 property keys 与 builder 一致）锁死漂移。**同时修复了既有双向漂移**：`index.ts`/`channel.ts` 此前缺 `typingHeartbeatMode`/`typingHeartbeatIntervalMs`/`typingInputSeconds` 且 `maxFileSizeMB`/`mediaTimeoutMs` 约束过松；`openclaw.plugin.json` 此前缺 `c2cMarkdownSafeChunkByteLimit`——现在三处统一为 Zod 权威集。
 
 ### Phase 2 前置
 

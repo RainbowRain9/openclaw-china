@@ -38,6 +38,7 @@
         "type": "string",
         "enum": ["markdown-block", "length"]
       },
+      "c2cMarkdownSafeChunkByteLimit": { "type": "integer", "minimum": 1 },
       "typingHeartbeatMode": {
         "type": "string",
         "enum": ["none", "idle", "always"]
@@ -98,6 +99,7 @@
               "type": "string",
               "enum": ["markdown-block", "length"]
             },
+            "c2cMarkdownSafeChunkByteLimit": { "type": "integer", "minimum": 1 },
             "typingHeartbeatMode": {
               "type": "string",
               "enum": ["none", "idle", "always"]

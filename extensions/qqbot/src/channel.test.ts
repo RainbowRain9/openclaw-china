@@ -22,9 +22,9 @@ describe("qqbotPlugin capabilities", () => {
     vi.clearAllMocks();
   });
 
-  it("publishes the qqbot runtime id and watches the qqbot-china config prefix", () => {
+  it("publishes the qqbot runtime id and watches the qqbot-china and qqbot config prefixes", () => {
     expect(qqbotPlugin.id).toBe("qqbot");
-    expect(qqbotPlugin.reload.configPrefixes).toEqual(["channels.qqbot-china"]);
+    expect(qqbotPlugin.reload.configPrefixes).toEqual(["channels.qqbot-china", "channels.qqbot"]);
   });
 
   it("declares direct, group, and channel chat types", () => {

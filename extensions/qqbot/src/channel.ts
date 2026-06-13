@@ -20,6 +20,7 @@ import {
   type PluginConfig,
   withQQBotChannelConfig,
 } from "./config.js";
+import { buildQQBotConfigJsonSchema } from "./config-schema.js";
 import { qqbotOnboardingAdapter } from "./onboarding.js";
 import { qqbotOutbound } from "./outbound.js";
 import { monitorQQBotProvider, stopQQBotMonitorForAccount } from "./monitor.js";
@@ -132,120 +133,7 @@ export const qqbotPlugin = {
   },
 
   configSchema: {
-    schema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        enabled: { type: "boolean" },
-        name: { type: "string" },
-        defaultAccount: { type: "string" },
-        appId: { type: ["string", "number"] },
-        clientSecret: { type: "string" },
-        streaming: { type: "boolean" },
-        displayAliases: {
-          type: "object",
-          additionalProperties: { type: "string" },
-        },
-        asr: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            enabled: { type: "boolean" },
-            appId: { type: ["string", "number"] },
-            secretId: { type: "string" },
-            secretKey: { type: "string" },
-          },
-        },
-        markdownSupport: { type: "boolean" },
-        c2cMarkdownDeliveryMode: {
-          type: "string",
-          enum: ["passive", "proactive-table-only", "proactive-all"],
-        },
-        c2cMarkdownChunkStrategy: {
-          type: "string",
-          enum: ["markdown-block", "length"],
-        },
-        c2cMarkdownSafeChunkByteLimit: { type: "integer", minimum: 1 },
-        dmPolicy: { type: "string", enum: ["open", "pairing", "allowlist"] },
-        groupPolicy: { type: "string", enum: ["open", "allowlist", "disabled"] },
-        requireMention: { type: "boolean" },
-        allowFrom: { type: "array", items: { type: "string" } },
-        groupAllowFrom: { type: "array", items: { type: "string" } },
-        historyLimit: { type: "integer", minimum: 0 },
-        textChunkLimit: { type: "integer", minimum: 1 },
-        replyFinalOnly: { type: "boolean" },
-        longTaskNoticeDelayMs: { type: "integer", minimum: 0 },
-        maxFileSizeMB: { type: "number" },
-        mediaTimeoutMs: { type: "number" },
-        autoSendLocalPathMedia: { type: "boolean" },
-        inboundMedia: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            dir: { type: "string" },
-            keepDays: { type: "number", minimum: 0 },
-          },
-        },
-        accounts: {
-          type: "object",
-          additionalProperties: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              name: { type: "string" },
-              enabled: { type: "boolean" },
-              appId: { type: ["string", "number"] },
-              clientSecret: { type: "string" },
-              streaming: { type: "boolean" },
-              displayAliases: {
-                type: "object",
-                additionalProperties: { type: "string" },
-              },
-              asr: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  enabled: { type: "boolean" },
-                  appId: { type: ["string", "number"] },
-                  secretId: { type: "string" },
-                  secretKey: { type: "string" },
-                },
-              },
-              markdownSupport: { type: "boolean" },
-              c2cMarkdownDeliveryMode: {
-                type: "string",
-                enum: ["passive", "proactive-table-only", "proactive-all"],
-              },
-              c2cMarkdownChunkStrategy: {
-                type: "string",
-                enum: ["markdown-block", "length"],
-              },
-              c2cMarkdownSafeChunkByteLimit: { type: "integer", minimum: 1 },
-              dmPolicy: { type: "string", enum: ["open", "pairing", "allowlist"] },
-              groupPolicy: { type: "string", enum: ["open", "allowlist", "disabled"] },
-              requireMention: { type: "boolean" },
-              allowFrom: { type: "array", items: { type: "string" } },
-              groupAllowFrom: { type: "array", items: { type: "string" } },
-              historyLimit: { type: "integer", minimum: 0 },
-              textChunkLimit: { type: "integer", minimum: 1 },
-              replyFinalOnly: { type: "boolean" },
-              longTaskNoticeDelayMs: { type: "integer", minimum: 0 },
-              maxFileSizeMB: { type: "number" },
-              mediaTimeoutMs: { type: "number" },
-              autoSendLocalPathMedia: { type: "boolean" },
-              inboundMedia: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  dir: { type: "string" },
-                  keepDays: { type: "number", minimum: 0 },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
+    schema: buildQQBotConfigJsonSchema(),
   },
 
   reload: { configPrefixes: [...QQBOT_CONFIG_PREFIXES] },

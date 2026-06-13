@@ -1,5 +1,7 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_QQBOT_C2C_MARKDOWN_SAFE_CHUNK_BYTE_LIMIT,
@@ -11,11 +13,86 @@ import {
   resolveQQBotASRCredentials,
   resolveQQBotC2CMarkdownSafeChunkByteLimit,
   resolveQQBotCredentials,
+  resolveQQBotChannelConfig,
   resolveQQBotStreaming,
   resolveQQBotTypingHeartbeatIntervalMs,
   resolveQQBotTypingHeartbeatMode,
   resolveQQBotTypingInputSeconds,
 } from "./config.js";
+import {
+  buildQQBotAccountJsonSchema,
+  buildQQBotConfigJsonSchema,
+} from "./config-schema.js";
+
+const PLUGIN_MANIFEST_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "openclaw.plugin.json");
+
+describe("resolveQQBotChannelConfig config-key compat layer", () => {
+  // Design doc §7 R1 / C1, §10 Phase-1 DoR #1/#2: qqbot-china is the
+  // authoritative key; channels.qqbot is a read-side fallback only.
+
+  it("reads the authoritative channels[qqbot-china] key", () => {
+    const cfg = { channels: { "qqbot-china": { appId: "CHINA_APP" } } };
+    expect(resolveQQBotChannelConfig(cfg)?.appId).toBe("CHINA_APP");
+  });
+
+  it("falls back to the upstream channels.qqbot key when qqbot-china is absent", () => {
+    const cfg = { channels: { qqbot: { appId: "UPSTREAM_APP" } } };
+    expect(resolveQQBotChannelConfig(cfg)?.appId).toBe("UPSTREAM_APP");
+  });
+
+  it("treats qqbot-china as authoritative when both keys are present", () => {
+    const cfg = {
+      channels: {
+        "qqbot-china": { appId: "CHINA_APP" },
+        qqbot: { appId: "UPSTREAM_APP" },
+      },
+    };
+    expect(resolveQQBotChannelConfig(cfg)?.appId).toBe("CHINA_APP");
+  });
+
+  it("returns undefined when neither config key is present", () => {
+    expect(resolveQQBotChannelConfig({ channels: {} })).toBeUndefined();
+    expect(resolveQQBotChannelConfig(undefined)).toBeUndefined();
+  });
+
+  it("ignores non-object config values under either key", () => {
+    const cfg = {
+      channels: { "qqbot-china": null, qqbot: "not-an-object" },
+    } as unknown as Parameters<typeof resolveQQBotChannelConfig>[0];
+    expect(resolveQQBotChannelConfig(cfg)).toBeUndefined();
+  });
+});
+
+describe("JSON Schema single-source-of-truth parity", () => {
+  // Design doc §4.1 (P0-A) + test #13: the TS builder (config-schema.ts) is the
+  // single source consumed by index.ts / channel.ts. The static configSchema in
+  // openclaw.plugin.json must stay in sync — this test guards against drift.
+
+  function manifestSchema() {
+    return JSON.parse(readFileSync(PLUGIN_MANIFEST_PATH, "utf8")).configSchema;
+  }
+
+  it("top-level configSchema property keys match the builder (openclaw.plugin.json)", () => {
+    const manifestKeys = Object.keys(manifestSchema().properties).sort();
+    const builderKeys = Object.keys(buildQQBotConfigJsonSchema().properties).sort();
+    expect(manifestKeys).toEqual(builderKeys);
+  });
+
+  it("account-level configSchema property keys match the builder (openclaw.plugin.json)", () => {
+    const manifestAccountKeys = Object.keys(
+      manifestSchema().properties.accounts.additionalProperties.properties,
+    ).sort();
+    const builderAccountKeys = Object.keys(buildQQBotAccountJsonSchema().properties).sort();
+    expect(manifestAccountKeys).toEqual(builderAccountKeys);
+  });
+
+  it("account keys are the top-level keys minus defaultAccount and accounts", () => {
+    const topKeys = Object.keys(buildQQBotConfigJsonSchema().properties);
+    const accountKeys = Object.keys(buildQQBotAccountJsonSchema().properties);
+    expect(topKeys).toEqual(expect.arrayContaining(accountKeys));
+    expect(topKeys).toEqual([...accountKeys, "defaultAccount", "accounts"]);
+  });
+});
 
 describe("QQBotConfigSchema", () => {
   it("applies media defaults", () => {
